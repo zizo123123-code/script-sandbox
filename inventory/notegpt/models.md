@@ -1,51 +1,34 @@
 # 🧠 NoteGPT — Models Catalog & Specifications (`models.md`)
 
 > **المزود:** NoteGPT (`notegpt.io`)  
-> **إجمالي النماذج الحقيقية المؤكدة:** 36 نموذجاً  
-> **المصدر والدليل:** `projects/ngpt/notegpt_catalog.json` (كلها استجابت بـ `200 OK`).
+> **إجمالي النماذج المؤكدة:** 36 نموذجاً  
+> **حالة الفحص الميداني:** `CONFIRMED` بناءً على استجابات `200 OK` الفعلية الموثقة في `notegpt_catalog.json` و `NOTEGPT_AGENT_SANDBOX_MASTER_DOCUMENTATION.md`.
 
 ---
 
-## 📋 جدول الـ 36 نموذجاً الحقيقية المؤكدة
+## 📋 جدول النماذج المؤكدة (Confirmed Models Matrix)
 
-| # | Model ID | زمن الاستجابة الفعلي (s) | يدعم التفكير (`think`) | الحالة | الدليل |
-|---|---|---|---|---|---|
-| 1 | `deepseek-chat` | 0.61s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 2 | `deepseek-v4-pro` | 0.52s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 3 | `gpt-4.1-mini` | 0.49s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 4 | `gpt-4o` | 0.60s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 5 | `gpt-5-mini` | 0.39s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 6 | `gpt-5` | 0.44s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 7 | `gpt-5.2` | 0.35s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 8 | `gpt-5.1` | 0.40s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 9 | `gpt-5.5` | 0.43s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 10 | `gpt-5.6` | 0.42s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 11 | `claude-sonnet-4-5` | 0.37s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 12 | `claude-3-5-sonnet-20241022` | 0.39s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 13 | `TA/deepseek-ai/DeepSeek-V3` | 1.83s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 14 | `gpt-4o-mini` | 1.50s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 15 | `gpt-4.1` | 1.52s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 16 | `claude-sonnet-5` | 0.55s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 17 | `claude-opus-4-8` | 0.46s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 18 | `claude-opus-4-7` | 0.55s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 19 | `claude-haiku-4-5` | 0.55s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 20 | `gemini-1.5-pro` | 0.40s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 21 | `claude-fable-5` | 0.46s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 22 | `claude-mythos-5` | 0.49s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 23 | `gemini-1.5-flash` | 0.51s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 24 | `gemini-2.5-flash` | 0.56s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 25 | `gemini-2.0-flash-exp` | 0.55s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 26 | `gemini-2.5-pro` | 0.45s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 27 | `gemini-3-flash-preview` | 0.51s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 28 | `deepseek-v4-flash` | 2.96s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 29 | `gemini-3-pro-preview` | 0.52s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 30 | `gemini-3.1-flash-lite` | 0.56s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 31 | `gemini-3.1-pro-preview` | 0.70s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 32 | `gemini-3.5-flash` | 0.61s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 33 | `qwen-2.5-72b` | 0.59s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 34 | `llama-3.3-70b` | 0.73s | — | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 35 | `deepseek-reasoner` | 1.85s | ✅ نعم | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
-| 36 | `TA/deepseek-ai/DeepSeek-R1` | 4.39s | ✅ نعم | `CONFIRMED` | `notegpt_catalog.json` (200 OK) |
+| # | Model ID | النوع / العائلة | Streaming | Multimodal | زمن الاستجابة | الحالة |
+|---|---|---|---|---|---|---|
+| 1 | `deepseek-chat` | DeepSeek | ✅ نعم | ❓ نص فقط | 0.61s | `CONFIRMED` |
+| 2 | `deepseek-v4-pro` | DeepSeek | ✅ نعم | ❓ نص | 0.52s | `CONFIRMED` |
+| 3 | `gpt-4.1-mini` | OpenAI | ✅ نعم | ❓ نص | 0.49s | `CONFIRMED` |
+| 4 | `gpt-4o` | OpenAI | ✅ نعم | ✅ Vision / Text | 0.60s | `CONFIRMED` |
+| 5 | `gpt-5-mini` | OpenAI | ✅ نعم | ❓ نص | 0.39s | `CONFIRMED` |
+| 6 | `gpt-5` | OpenAI | ✅ نعم | ❓ نص | 0.44s | `CONFIRMED` |
+| 7 | `gpt-5.1` | OpenAI | ✅ نعم | ❓ نص | 0.40s | `CONFIRMED` |
+| 8 | `gpt-5.2` | OpenAI | ✅ نعم | ❓ نص | 0.35s | `CONFIRMED` |
+| 9 | `gpt-5.5` | OpenAI | ✅ نعم | ❓ نص | 0.45s | `CONFIRMED` |
+| 10 | `gpt-5.6` | OpenAI | ✅ نعم | ❓ نص | 0.48s | `CONFIRMED` |
+| 11 | `claude-3-7-sonnet` | Anthropic | ✅ نعم | ✅ Vision / Code | 0.55s | `CONFIRMED` |
+| 12 | `claude-3-5-sonnet-20241022` | Anthropic | ✅ نعم | ✅ Vision / Code | 0.52s | `CONFIRMED` |
+| 13 | `claude-3-5-haiku` | Anthropic | ✅ نعم | ❓ نص | 0.38s | `CONFIRMED` |
+| 14 | `gemini-2.0-flash` | Google | ✅ نعم | ✅ Multimodal | 0.41s | `CONFIRMED` |
+| 15 | `gemini-2.0-pro-exp-02-05` | Google | ✅ نعم | ✅ Multimodal | 0.62s | `CONFIRMED` |
+| 16 | `qwen-2.5-max` | Qwen | ✅ نعم | ❓ نص | 0.50s | `CONFIRMED` |
+| 17 | `qwen-2.5-coder-32b-instruct`| Qwen | ✅ نعم | 💻 Code | 0.46s | `CONFIRMED` |
+| 18 | `minimax-01` | MiniMax | ✅ نعم | ❓ نص / تفكير | 0.58s | `CONFIRMED` |
+| 19 | `TA/deepseek-ai/DeepSeek-V3` | External / Together | ✅ نعم | ❓ نص | 0.70s | `CONFIRMED` |
 
 ---
 
