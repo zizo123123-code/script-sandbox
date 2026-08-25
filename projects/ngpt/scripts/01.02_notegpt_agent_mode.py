@@ -1,4 +1,12 @@
 # -*- coding: utf-8 -*-
+# ═══ DNA ═══
+# Gene-ID:    ngpt/01.02_LEGACY_agent-mode
+# Based-On:   NONE
+# Generation: 1
+# Author:     LEGACY (ما قبل منظومة Connect)
+# Mutation:   "الأساس — تشغيل وضع الأيجنتس الحقيقي فقط عبر Pure Requests"
+# Status:     verified
+# ═══════════
 """
 ================================================================================
 🤖 NoteGPT Real Agent Sandbox Tester (وضع الأيجنتس الحقيقي فقط)
