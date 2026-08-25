@@ -1,4 +1,0 @@
-cloudscraper>=1.2.71
-requests>=2.31.0
-Pillow>=10.0.0
-colorama>=0.4.6
