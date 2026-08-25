@@ -9,3 +9,10 @@ venv/
 *.tmp
 .DS_Store
 Thumbs.db
+
+# ---- أسرار (CORRECTIONS_ROUND2.md §0) ----
+.env
+*.env
+!.env.example
+accounts_notegpt.json
+cookies.json
