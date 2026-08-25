@@ -83,20 +83,35 @@ APP_CODE_MAP: Dict[int, Dict[str, Any]] = {
         "retryable": True,
         "safe_message": "Provider plan quota exhausted.",
         "recovery": "rotate_identity",
+        "evidence": "01.06:798 + HAR x14",
     },
     # HAR x8 · body says literally "login expired" — arrives with HTTP 200
+    #
+    # NOTE ON RECOVERY: the category is AUTH_EXPIRED because that is what the
+    # code MEANS, but the recovery hint is rotate_identity because that is what
+    # the reference implementation actually DOES. 01.06:798 groups all three
+    # codes into one branch:
+    #     elif code in [164019, 164002, 164003]:
+    #         self.rotate_identity(keep_conversation=True)
+    # It never calls login() on this path. Re-authentication is the intuitive
+    # response and may well be correct, but it is unverified, so it is recorded
+    # as a fallback rather than promoted to the primary recovery.
     164003: {
         "category": AUTH_EXPIRED,
         "retryable": True,
         "safe_message": "Provider session expired; re-authentication required.",
-        "recovery": "reauthenticate",
+        "recovery": "rotate_identity",
+        "recovery_fallback": "reauthenticate",
+        "evidence": "01.06:798 + HAR x8",
     },
-    # Handled in code at 01.06:798 but 0 occurrences in HAR
+    # Handled in the same branch at 01.06:798 · 0 occurrences in HAR
     164002: {
         "category": INVALID_CREDENTIAL,
         "retryable": True,
         "safe_message": "Provider authentication failed.",
-        "recovery": "reauthenticate",
+        "recovery": "rotate_identity",
+        "recovery_fallback": "reauthenticate",
+        "evidence": "01.06:798 only (0 HAR occurrences)",
     },
 }
 
@@ -183,6 +198,12 @@ def normalize_error(
                     safe_message=spec["safe_message"],
                     details={
                         "recovery": spec.get("recovery"),
+                        # Propagated rather than hardcoded: the map is the single
+                        # source of truth, so provenance ("evidence") and the
+                        # unverified "recovery_fallback" reach the caller instead
+                        # of being silently dropped here.
+                        "recovery_fallback": spec.get("recovery_fallback"),
+                        "evidence": spec.get("evidence", "none"),
                         "http_status": http_status,
                         "source": "app_code",
                     },
