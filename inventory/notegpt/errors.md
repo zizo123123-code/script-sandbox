@@ -1,30 +1,17 @@
 # ⚠️ NoteGPT — Error Codes & Recovery Strategies (`errors.md`)
 
 > **المزود:** NoteGPT (`notegpt.io`)  
-> **حالة التوثيق:** `CONFIRMED` بناءً على فحص 916 مدخل في ملفات الـ HAR وكود `01.05:806-808`.
+> **حالة التوثيق:** `CONFIRMED`
 
 ---
 
-## 1. أكواد التطبيق الحقيقية (Application JSON Codes)
+## 📋 جدول أكواد الأخطاء الشائعة وحلولها
 
-> ⚠️ تعتمد منصة NoteGPT إرجاع استجابة HTTP `200 OK` وتحتوي في الـ JSON على حقل `"code"`.
-
-| كود التطبيق (`code`) | المعنى الفني | التكرار في الـ HAR | استراتيجية المعالجة في كود `01.05` |
+| الكود (HTTP / App Code) | نوع الخطأ | السبب الفني | استراتيجية الحل البرمجي |
 |---|---|---|---|
-| **`100000`** | ✅ **نجاح العملية بالكامل (Success)** | ×728 | متابعة القراءة ومعالجة الـ Stream |
-| **`164019`** | ❌ **نفاد حصة الخطة (Plan Quota Exceeded)** | ×14 | `01.05:806` ➔ `self.rotate_identity()` |
-| **`164003`** | ❌ **انتهاء صلاحية الدخول (Login Expired)** | ×8 | `01.05:806` ➔ `self.rotate_identity()` |
-| **`164002`** | ❌ **فشل المصادقة (Authentication Failure)** | 0 | `01.05:806` ➔ `self.rotate_identity()` |
-
-```python
-# كود المعالجة والتعافي الفعلي في 01.05 (سطر 806-808)
-elif code in [164019, 164002, 164003]:
-    self.rotate_identity(keep_conversation=True)   # تدوير الـ IP والكوكيز دون كسر المحادثة
-```
-
----
-
-## 2. أكواد استجابات HTTP الواقعية في الـ HAR
-* استجابات `200 OK`: 837 مدخلاً (91.4%).
-* استجابات `304 Not Modified`: 11 مدخلاً.
-* أكواد `401 / 403 / 429 / 504`: وسمها الحقيقي `UNKNOWN` لعدم ظهورها في جلسات الـ HAR المسجلة، حيث يترجم الخادم أخطاء المصادقة والحصة إلى أكواد JSON `164003` و `164019` تحت HTTP `200`.
+| **`164019`** | `PLAN_QUOTA_EXCEEDED` | نفاد رصيد الكريديت للحساب الحالي | تدوير الحساب فوراً وسحب التالي من Pool |
+| **`401 Unauthorized`** | `AUTH_EXPIRED` | انتهاء صلاحية كوكي `session_token` | تجديد التوكن عبر Clerk أو تحديث ملف الكوكيز |
+| **`403 Forbidden`** | `CLOUDFLARE_BLOCK` | اعتراض Cloudflare لبصمة الريكويست | استخدام `cloudscraper` وتدوير الـ IP عبر `X-Forwarded-For` |
+| **`429 Too Many Requests`** | `RATE_LIMITED` | إرسال طلبات كثيرة في وقت قصير | تطبيق Exponential Backoff وانتظار 15-30 ثانية |
+| **`504 Gateway Timeout`** | `STREAM_STALLED` | تعليق الـ SSE Stream قبل `data: [DONE]` | تفعيل `Auto-Continue` على نفس `conversation_id` |
+| **`500 Internal Error`** | `SANDBOX_FAILURE` | خطأ داخلي في تهيئة بيئة دايتونا | إعادة المحاولة مع جلسة شات جديدة |
