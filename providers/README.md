@@ -23,7 +23,7 @@ providers/
         ├── assets/                  ← upload (both paths blocked), download
         ├── pool/                    ← 7 not-applicable stubs
         ├── provider_health/         ← monitor, circuit breaker
-        └── tests/                   ← 44 offline contract tests
+        └── tests/                   ← 48 offline contract tests
 ```
 
 The `registry/`, `common/`, and `templates/` directories from 31 §5 are not
