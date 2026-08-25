@@ -1,4 +1,12 @@
 # -*- coding: utf-8 -*-
+# ═══ DNA ═══
+# Gene-ID:    ngpt/01.05_LEGACY_agent-mode
+# Based-On:   ngpt/01.04_LEGACY_agent-mode
+# Generation: 4
+# Author:     LEGACY (ما قبل منظومة Connect)
+# Mutation:   "مطابقة كاملة مع HAR الأخير: Native Files Payload + History Sync"
+# Status:     verified
+# ═══════════
 """
 ================================================================================
 🤖 NoteGPT Real Agent Sandbox Tester v01.05 (Native Files Payload & History Sync)
