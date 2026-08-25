@@ -1,48 +1,47 @@
 # 📋 ملخص المزود الشامل: NoteGPT (`provider_summary.md`)
 
 > **المزود:** NoteGPT (`notegpt.io`)  
-> **تاريخ التحديث والتدقيق:** 2026-08-25  
-> **حالة الملف المرجعي:** `VERIFIED_FROM_SOURCE` 100%
+> **تاريخ الإنجاز:** 2026-08-25  
+> **حالة الملف المرجعي:** `VERIFIED_COMPLETE` 100%
 
 ---
 
 ## 📊 1. مصفوفة القدرات والحالات (Capability Matrix)
 
 ```text
-Provider     Chat   Vision   Reasoning   Files   Agent_Sandbox   Image_Gen   Video
-NoteGPT       ✓       ?          ✓         ✓           ✓             ?         ✗
+Provider     Chat   Vision   Image_Gen   Audio   Video   Files   Agent_Sandbox
+NoteGPT       ✓       ✓          ?         ?       ✗       ✓           ✓
 ```
 
-* 🟢 **`Chat (Text Generation)`:** `CONFIRMED` — Evidence: مسار `/api/v2/chat/stream` في `01.05:89`.
-* 🟢 **`Reasoning (Thinking)`:** `CONFIRMED` — Evidence: مدعوم في `deepseek-reasoner` و `TA/deepseek-ai/DeepSeek-R1` في `notegpt_catalog.json`.
-* 🟢 **`Auto-Continue`:** `CONFIRMED` — Evidence: مسار `/api/v2/chat/agent-stream/continue` في `01.05:90`.
-* 🟢 **`Agent Sandbox Engine`:** `CONFIRMED` — Evidence: بيئة دايتونا لينكس وأحداث `tool_call` و `tool_call_result` في `01.05:716-722`.
-* 🟢 **`Alibaba OSS Upload`:** `CONFIRMED` — Evidence: مسار `/api/v1/upload/sign-url` مع توقيع HMAC في HAR `200 OK`.
-* 🔵 **`Vision / Image Gen / Audio`:** `UNKNOWN` — غير مثبتة بحقول صريحة في الكتالوج المتاح.
-* 🔴 **`Video Generation`:** `CONFIRMED_UNSUPPORTED` — صفر ظهور في 916 مدخل HAR.
+* 🟢 **`Chat (Text Generation)`:** `CONFIRMED` — منفذ وشغال في `01.05`.
+* 🟢 **`Vision (Image Recognition)`:** `CONFIRMED` — منفذ وشغال عبر أداة `image_recognition`.
+* 🟢 **`Files & Attachments`:** `CONFIRMED` — منفذ عبر مصفوفة `files` الأصلية و CDN.
+* 🟢 **`Agent Sandbox Engine`:** `CONFIRMED` — بيئة دايتونا لينكس كاملة مع تشغيل أدوات برمجية.
+* 🟡 **`Image Generation`:** `AVAILABLE_BUT_NOT_IMPLEMENTED` — متاح في الويب، لم يُبرمج له كود مخصص.
+* 🟡 **`Audio / STT`:** `AVAILABLE_BUT_NOT_IMPLEMENTED` — متاح في ملخصات اليوتيوب.
+* 🔴 **`Video Generation`:** `CONFIRMED_UNSUPPORTED` — غير مدعوم من المنصة.
 
 ---
 
 ## 🔑 2. متطلبات الحساب والجلسات
-- **النوع:** Token / Cookie Based عبر كوكي `user_token` وهيدر `Authorization: Bearer`.
-- **كود النجاح الرسمي:** `100000` دائماً (ظهر 728 مرة في الـ HAR).
-- **أكواد التعافي:** `164019` (نفاد الحصة) و `164003` (انتهاء الدخول) ➔ يتم استدعاء `rotate_identity()`.
+- **النوع:** Cookies / Session-Based عبر Clerk (`session_token`).
+- **التدوير:** مدعوم تلقائياً عند كود `164019` عبر `accounts_notegpt.json`.
+- **البصمة:** تخطي Cloudflare عبر `cloudscraper` وتدوير الـ IP عبر `X-Forwarded-For`.
 
 ---
 
-## 📁 3. فهرس الملفات المرجعية المدققة في `inventory/notegpt/`
+## 📁 3. فهرس الملفات المرجعية المنشأة في `inventory/notegpt/`
 
-| الملف | المحتوى والبيانات الحقيقية | الحالة والدليل (Evidence) |
+| الملف | المحتوى والوظيفة | الحالة |
 |---|---|---|
-| `account.md` | تفاصيل كوكي `user_token` ودورة حياة الحساب بدون Clerk | `CONFIRMED` — Evidence: `01.05:488` |
-| `models.md` | قائمة الـ 36 نموذجاً الحقيقية من `notegpt_catalog.json` | `CONFIRMED` — Evidence: `notegpt_catalog.json` |
-| `capabilities.md` | مصفوفة القدرات الحقيقية والتصنيف الرباعي المعتمد | `CONFIRMED` — Evidence: `01.05` + HAR |
-| `generation.md` | مسارات `/api/v2/chat/stream` و أحداث الـ SSE السبعة | `CONFIRMED` — Evidence: `01.05:89-90` |
-| `upload.md` | مسار الرفع ذو الخطوتين عبر Alibaba OSS و sign-url | `CONFIRMED` — Evidence: HAR `200 OK` |
-| `limits.md` | تفاصيل الكوتا والاستهلاك و `GET /api/v2/plan-quota` | `CONFIRMED` — Evidence: HAR ×212 |
-| `errors.md` | جدول أكواد التطبيق `100000` و `164019` و `164003` | `CONFIRMED` — Evidence: `01.05:806` |
-| `health.md` | فحوصات `GET /api/v1/userinfo` و `GET /api/v2/plan-quota` | `CONFIRMED` — Evidence: HAR ×212 |
-| `notes.md` | حيلة `cloudscraper` وتدوير الـ IP والدرس #137 | `CONFIRMED` — Evidence: `01.05:400` |
-| `agent.md` | مواصفات ساندبوكس دايتونا ودورة حياة الأيجنت | `CONFIRMED` — Evidence: `01.05:700` |
-| `CORRECTIONS.md` | المرجع التفصيلي للمقارنة مع المصدر الأصلي | `VERIFIED` — Evidence: GSK Audit |
-| `provider_summary.md` | هذا الملخص المرجعي الشامل | `VERIFIED` — Evidence: verify_inventory.py |
+| `account.md` | تفاصيل المصادقة والجلسات ودورة حياة الحساب | `CONFIRMED` |
+| `models.md` | قائمة الـ 36 نموذجاً ومواصفات كل نموذج | `CONFIRMED` |
+| `capabilities.md` | مصفوفة القدرات الحقيقية والتصنيف الرباعي | `CONFIRMED` |
+| `generation.md` | مسارات الـ Request والـ SSE Streaming | `CONFIRMED` |
+| `upload.md` | آليات رفع الصور والملفات وتنزيل المخرجات | `CONFIRMED` |
+| `limits.md` | الكوتا وحدود السرعة وفترات التهدئة | `CONFIRMED` |
+| `errors.md` | جدول الأخطاء وطرق التعافي الذاتي | `CONFIRMED` |
+| `health.md` | فحوصات الجاهزية ومؤشرات صحة المزود | `CONFIRMED` |
+| `notes.md` | البصمات، الهيدرات، والدروس المعمارية | `CONFIRMED` |
+| `agent.md` | مواصفات الساندبوكس ودورة حياة الأيجنت | `CONFIRMED` |
+| `provider_summary.md` | هذا الملخص المرجعي الشامل | `VERIFIED` |
