@@ -23,7 +23,16 @@ import argparse
 import json
 import re
 import sys
+import io
 from pathlib import Path
+
+# تأمين مخرجات UTF-8 على كافة الأنظمة
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 ROOT = Path(__file__).resolve().parents[2]
 INVENTORY = ROOT / "inventory"
@@ -214,7 +223,9 @@ def check_line_refs(pdir: Path, proj: Path) -> None:
         ]
         for pat in pats:
             for m in re.finditer(pat, text):
-                ver, a, b = m.group(1), int(m.group(2)), m.group(3)
+                ver = m.group(1)
+                a = int(m.group(2))
+                b = m.group(3) if (m.lastindex and m.lastindex >= 3) else None
                 if ver not in cache:
                     hits = list(proj.glob(f"scripts/{ver}*.py"))
                     cache[ver] = (
