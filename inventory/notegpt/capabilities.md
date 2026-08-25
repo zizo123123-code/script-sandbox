@@ -1,28 +1,22 @@
 # ⚡ NoteGPT — Capabilities Matrix (`capabilities.md`)
 
 > **المزود:** NoteGPT (`notegpt.io`)  
-> **التصنيف:** مصفوفة القدرات الحقيقية ومقارنتها بما هو مطبق في الكود الحالي.
+> **حالة التوثيق:** `CONFIRMED` بناءً على فحص كود `01.05` والـ 36 نموذجاً في `notegpt_catalog.json`.
 
 ---
 
-## 📊 مصفوفة القدرات (Capabilities Matrix)
+## 📊 مصفوفة القدرات الحقيقية (Capabilities Matrix)
 
 | القدرة (Capability) | حالة المزود (Provider Support) | منفذ في الكود الحالي؟ | الدليل / المصدر (Evidence) | ملاحظات تقنية |
 |---|---|---|---|---|
-| **Text Generation (Chat)** | `CONFIRMED` | ✅ نعم | `01.05` سطر 320-380 | `POST /api/v2/ai-chat/stream` |
-| **Streaming (SSE)** | `CONFIRMED` | ✅ نعم | `01.05` سطر 390-480 | معالجة `data: {"type": ...}` |
-| **Image Recognition (Vision)** | `CONFIRMED` | ✅ نعم | `01.05` سطر 620-680 | استدعاء أداة `image_recognition` في Daytona |
-| **Agent / Sandbox Engine** | `CONFIRMED` | ✅ نعم | `01.05` سطر 700-850 | بيئة Linux كاملة وتنفيذ Python / Shell |
-| **File Upload (Images/Docs)** | `CONFIRMED` | ✅ نعم | `01.05` سطر 240-310 | مصفوفة `files: [...]` الأصلية |
-| **YouTube Transcript / OCR** | `CONFIRMED` | ✅ نعم | `01.05` سطر 180-210 | دعم روابط اليوتيوب وأداة `fetch_url` |
-| **Web Search / Browsing** | `CONFIRMED` | ✅ نعم | HAR entry 41 (`web_search`) | أداة داخلية متاحة للوكلاء |
-| **Image Generation (DALL-E)** | `AVAILABLE_BUT_NOT_IMPLEMENTED` | ⏳ غير مطبق | واجهة الموقع تدعم توليد الصور | مدعوم في الـ UI ولم يُبنَ كود مخصص له بعد |
-| **Voice / Speech-to-Text** | `AVAILABLE_BUT_NOT_IMPLEMENTED` | ⏳ غير مطبق | تسجيلات الصوت في ملخصات اليوتيوب | متاح عبر ملحقات الموقع |
-| **Video Generation** | `CONFIRMED_UNSUPPORTED` | ❌ غير مدعوم | فحص الـ API والـ Endpoints | المنصة مخصصة للملخصات والأيجنتس |
-| **Embeddings Endpoint** | `UNKNOWN` | ❓ غير مؤكد | غير موجود في الـ HAR المتاح | قد يكون متاحاً داخلياً لقاعدة المعرفة |
-
----
-
-## 🎯 خلاصة مقارنة الكود الفعلي بالمتاح:
-* **نسبة تغطية الكود الحالي للقدرات الأساسية:** 80% (الشات، الساندبوكس، الرؤية، رفع الملفات، اليوتيوب، البحث).
-* **القدرات المتاحة ولم تنفذ بعد:** توليد الصور، والتحويل الصوتي للملخصات.
+| **Text Generation (Chat)** | `CONFIRMED` | ✅ نعم | `01.05:89` (`/api/v2/chat/stream`) | استجابة SSE Stream كاملة |
+| **Auto-Continue** | `CONFIRMED` | ✅ نعم | `01.05:90` (`/api/v2/chat/agent-stream/continue`) | استئناف البث التلقائي |
+| **Reasoning / Thinking Models** | `CONFIRMED` | ✅ نعم | `notegpt_catalog.json` (`think: true`) | نماذج R1 و DeepSeek Reasoner |
+| **Agent / Sandbox Engine** | `CONFIRMED` | ✅ نعم | `01.05:700-850` | بيئة دايتونا لينكس وأداة `bash` |
+| **Tool Calling (`tool_call`)** | `CONFIRMED` | ✅ نعم | `01.05:716` و `01.05:722` | تشغيل أدوات داخل الساندبوكس |
+| **Custom Agents (`--agents`)** | `CONFIRMED` | ✅ نعم | HAR ×16 (`/api/v1/agent/share/list`) | قائمة الوكلاء المخصصين |
+| **Vision / Image Input** | `UNKNOWN` | ⏳ fallback | `01.05:182` | لا يوجد حقل مخصص في الكتالوج |
+| **Alibaba OSS Signed Upload** | `CONFIRMED` | ⏳ يدوي في الكود | HAR `POST /api/v1/upload/sign-url` | رفع الصور بتوقيع HMAC |
+| **Image Generation** | `UNKNOWN` | ❌ غير مطبق | غير مثبت بـ Endpoint صريح في الـ HAR | يحتاج استكشاف إضافي |
+| **Audio / Speech-to-Text** | `UNKNOWN` | ❌ غير مطبق | غير مثبت في الـ HAR الحالي | يحتاج استكشاف إضافي |
+| **Video Generation** | `CONFIRMED_UNSUPPORTED` | ❌ غير مدعوم | لا يوجد أي أثر في 916 مدخل HAR | المنصة للنصوص والأيجنتس فقط |
