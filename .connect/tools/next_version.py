@@ -7,7 +7,8 @@ next_version.py — حساب رقم الإصدار التالي أوتوماتي
     python .connect/tools/next_version.py --project ngpt
     → يطبع مثلاً: 01.07
 
-يفحص projects/{slug}/scripts/ عن أسماء بنمط {NN.NN}_{CODE}_{slug}.py
+يفحص projects/{slug}/scripts/ عن أي ملف يبدأ بـ NN.NN_ (يشمل النمط الجديد
+{NN.NN}_{CODE}_{slug}.py وسكربتات LEGACY القديمة {NN.NN}_{slug}.py)
 ويطبع (أعلى NN.NN موجود + 0.01). لو المجلد فاضي → 01.00
 """
 import argparse
@@ -16,7 +17,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-PATTERN = re.compile(r"^(\d{2})\.(\d{2})_[A-Z]{2,4}_.+\.py$")
+PATTERN = re.compile(r"^(\d{2})\.(\d{2})_.+\.py$")
 
 
 def next_version(scripts_dir: Path) -> str:
