@@ -1,4 +1,12 @@
 # -*- coding: utf-8 -*-
+# ═══ DNA ═══
+# Gene-ID:    ngpt/01.04_LEGACY_agent-mode
+# Based-On:   ngpt/01.03_LEGACY_agent-mode
+# Generation: 3
+# Author:     LEGACY (ما قبل منظومة Connect)
+# Mutation:   "Auto Drop-Folder + تدوير IP نقي"
+# Status:     verified
+# ═══════════
 """
 ================================================================================
 🤖 NoteGPT Real Agent Sandbox Tester v01.04 (Auto Drop-Folder & Pure IP Rotation)
