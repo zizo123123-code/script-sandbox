@@ -1,0 +1,312 @@
+# ==============================================================================
+# NoteGPT — Real Provider Manifest
+# ==============================================================================
+# SPEC        : 01_30_PROVIDER_ARCHITECTURE_AND_PLUGIN_SPEC.md §7, §15.1
+# ONBOARDING  : 01_31_PROVIDER_SCAFFOLDING_AND_ONBOARDING.md §20 Type C + Type L
+# SHAPE       : Session/Cookie Website Provider + Provider-Native Agent Provider
+#
+# EVIDENCE PRECEDENCE (inventory/notegpt/CORRECTIONS_ROUND2.md header):
+#   CORRECTIONS_ROUND2.md  >  CORRECTIONS.md  >  the 11 original inventory files
+#   The 11 original files are marked REJECTED and are NOT used as a source here.
+#
+# Every value below is either:
+#   - CONFIRMED : traceable to code line / HAR count
+#   - UNKNOWN   : no evidence in any source (per CORRECTIONS.md §13: absence of
+#                 evidence is NOT evidence of absence — never downgrade to false)
+# ==============================================================================
+
+id: notegpt
+name: NoteGPT
+version: 1.0.0
+
+# --- Activation state -------------------------------------------------------
+# 31 §19.13 "Keep provider disabled until tests pass"
+# 31 §22    "admin config enables provider"
+# Contract tests are stubs (no live credentials in CI), so status stays disabled.
+status: disabled
+is_template: false
+is_functional: false
+real_provider_required: false
+
+# ==============================================================================
+# AUTH  — 31 §20 Type C (session/cookie)
+# ==============================================================================
+auth:
+  types:
+    - session_cookie
+  supports_refresh: true
+  secret_storage: env_var          # projects/ngpt/.env.example (never in code)
+
+  # CORRECTIONS.md §1 — the real cookie names
+  cookie_names:
+    primary: user_token            # 01.05:488 / 01.06:480 — NOT "session_token"
+    companions:
+      - anonymous_user_id          # 01.05:484
+      - sbox-guid                  # 01.05:485
+  header_alternative: "Authorization: Bearer <token>"   # 01.05:573
+
+  login_endpoint: /api/v1/auth/email/login              # 01.05:117 / 01.06:109
+
+  # CORRECTIONS.md §1 — explicitly corrected UNKNOWNs
+  identity_provider: none          # grep -ci clerk = 0 in code AND 916 HAR entries
+  session_ttl: unknown             # no TTL in any source (was falsely "30 days")
+  csrf_required: unknown
+  public_api_key: unknown          # absence of evidence != unsupported (§13)
+
+# ==============================================================================
+# ACCOUNT POOL — 30 §10.1
+# ==============================================================================
+# CORRECTIONS.md §7 "Account Pool Rotation = NOT_IMPLEMENTED".
+# accounts_notegpt.json does NOT exist in the repo; rotate_identity() rotates
+# IP + cookies only (01.06:523 keep_conversation=True). Declaring a pool here
+# would be faking functionality — forbidden by 30 §17 / 31 §4.
+account_pool:
+  supported: false
+  required: false
+  lease_required: false
+  fencing_required: false
+  reason: not_implemented_upstream
+  note: >
+    rotate_identity() rotates IP + cookies on the SAME account and preserves
+    conversation_id. This is identity rotation, not account-pool rotation.
+    Planned as a future task (T-V02-001 item 3), not a current capability.
+
+# ==============================================================================
+# CAPABILITIES — CORRECTIONS.md "خلاصة الحالات المصححة"
+# ==============================================================================
+capabilities:
+  # --- CONFIRMED ---
+  chat: true                       # POST /api/v2/chat/stream · HAR x62
+  text_generation: true
+  streaming: true                  # SSE, 13 event types (ROUND2 §2)
+  reasoning: true                  # deepseek-reasoner / DeepSeek-R1 think=true
+  code: true                       # sandbox executes python3 / bash
+  vision_input: true               # image_recognition tool · 01.05:1076
+  file_upload: true                # see assets block (third-party path!)
+  provider_agent: true             # Daytona sandbox · 01.05:745-911
+  tool_use: true                   # fetch_url / web_search · 01.05:1078
+
+  # --- UNKNOWN (CORRECTIONS.md §13 — no traceable evidence either way) ---
+  image_generation: unknown
+  audio_input: unknown
+  audio_output: unknown
+  speech_to_text: unknown
+  text_to_speech: unknown
+  embeddings: unknown
+  rerank: unknown
+  moderation: unknown
+  video_generation: unknown        # was falsely CONFIRMED_UNSUPPORTED
+  browser: unknown
+
+# ==============================================================================
+# OPERATIONS — 30 §5 "A provider implements only the operations it declares"
+# ==============================================================================
+operations:
+  generate_text: true
+  run_provider_agent: true
+  analyze_vision: true
+  upload_asset: true
+  download_asset: true
+
+  generate_image: false
+  transcribe_audio: false
+  synthesize_speech: false
+  create_embeddings: false
+  rerank_documents: false
+  moderate_content: false
+
+# ==============================================================================
+# MODELS — CORRECTIONS.md §6 (the authoritative 36-model catalog)
+# ==============================================================================
+models:
+  discovery: static                # from projects/ngpt/notegpt_catalog.json
+  catalog_source: projects/ngpt/notegpt_catalog.json
+  total_confirmed: 36
+  param_field: model               # passed as {"model": "<MODEL_ID>"}
+  default: deepseek-v4-flash       # 01.06:100 Config.DEFAULT_MODEL
+
+  # ROUND2 §5: the catalog has NO vision/multimodal field. Any per-model
+  # multimodal claim is a guess -> modality per model is UNKNOWN by design.
+  per_model_modality: unknown
+
+  reasoning_models:                # only these have think=true
+    - deepseek-reasoner
+    - TA/deepseek-ai/DeepSeek-R1
+
+  # 7 models that inventory/notegpt/models.md invented — must never be routed
+  known_phantom_models:
+    - claude-3-7-sonnet
+    - claude-3-5-haiku
+    - gemini-2.0-flash
+    - gemini-2.0-pro-exp-02-05
+    - qwen-2.5-max
+    - qwen-2.5-coder-32b-instruct
+    - minimax-01
+
+# ==============================================================================
+# ENDPOINTS — CORRECTIONS.md §2 (verified against code + HAR counts)
+# ==============================================================================
+endpoints:
+  base_url: https://notegpt.io
+  referer: https://notegpt.io/ai-agent
+
+  chat_stream: /api/v2/chat/stream                    # 01.06:81 · HAR x62
+  agent_continue: /api/v2/chat/agent-stream/continue  # 01.06:82 · HAR x10
+  chat_record: /api/v2/ai-chat                        # GET/POST/PUT · x119/x4/x129
+  login: /api/v1/auth/email/login                     # 01.06:109
+  user_info: /api/v1/userinfo                         # HAR x10 (NOT /api/v2/user/info)
+  plan_quota: /api/v2/plan-quota                      # HAR x212 (NOT /api/v2/plan/quota)
+  quota_usage: /api/v2/user/quota-usage               # HAR x212
+  user_quota: /api/v2/user/quota                      # HAR x11
+  agent_share_list: /api/v1/agent/share/list          # HAR x16
+  upload_sign_url: /api/v1/upload/sign-url            # HAR 200 OK
+  payment_permissions: /api/v2/payments/check-user-permissions  # HAR x6
+
+# ==============================================================================
+# ASSETS — CORRECTIONS.md §5 + ROUND2 §3
+# ==============================================================================
+assets:
+  upload_image: true
+  upload_document: true
+  output_files: true
+  download_required: true
+
+  # ROUND2 §3 — CRITICAL: official path is documented but NOT implemented.
+  official_path:
+    status: documented_not_implemented    # grep -c "sign-url" = 0
+    flow: POST /api/v1/upload/sign-url -> PUT to Alibaba OSS
+    oss_host: nc-product-us-oss.oss-us-west-1.aliyuncs.com
+    url_ttl_seconds: 600                  # Expires=... ~10 min, NOT permanent
+    blocker: hmac_sign_field_undocumented # the "sign" field is the real obstacle
+
+  actual_path:
+    status: implemented_via_third_party   # 01.06:166
+    host: https://tmpfiles.org/api/v1/upload
+    warning: >
+      Attachments transit a PUBLIC third-party service before reaching NoteGPT.
+      Data-exposure risk — flagged in ROUND2 §3, must be reviewed before any
+      production enablement.
+
+  broken_fallback:
+    location: 01.06:174
+    issue: hardcoded date 2026/08/25 in cdn.ng-resource.com path
+    effect: fallback URL is structurally dead on any other day
+
+  max_file_size: unknown            # "50 MB" had no evidence
+  supported_formats: unknown        # code does not restrict
+
+# ==============================================================================
+# RATE LIMITS — 30 §12 · CORRECTIONS.md §7
+# ==============================================================================
+rate_limits:
+  strategy: provider_defined
+  dimensions:
+    - account
+    - endpoint
+    - time_window
+
+  confirmed:
+    quota_exhausted_code: 164019    # HAR x14 · handled 01.06:798
+    auto_continue_limit: 5          # 01.06:104 AUTO_CONTINUE_LIMIT
+    max_attached_sources: 5         # 01.06:106
+    request_timeout_seconds: 120    # 01.06:103
+
+  # CORRECTIONS.md §7 — every one of these was an unevidenced claim
+  unknown:
+    daily_quota: unknown            # "50-100 credits" had no source
+    rpm: unknown                    # zero 429 responses in 916 entries
+    cooldown_seconds: unknown
+    quota_reset_time: unknown
+    context_window: unknown
+
+# ==============================================================================
+# HEALTH — 30 §11 · CORRECTIONS.md §8
+# ==============================================================================
+health:
+  checks:
+    - auth_valid
+    - endpoint_available
+    - quota_available
+
+  # The single most important operational fact about this provider:
+  http_status_unreliable: true
+  note: >
+    An expired session returns HTTP 200 with body {"code":164003,
+    "message":"login expired"}. Health MUST parse the JSON app code —
+    HTTP status alone cannot detect auth failure.
+
+  success_code: 100000              # HAR x728 — NOT 0 (code:0 never appears)
+  probes:
+    ping: "GET / -> 200"
+    token_valid: "GET /api/v1/userinfo -> code == 100000"
+    quota: "GET /api/v2/plan-quota -> code == 100000"
+    usage: "GET /api/v2/user/quota-usage -> code == 100000"
+
+# ==============================================================================
+# RUNTIME — 31 §20 Type C
+# ==============================================================================
+runtime:
+  session_required: true
+  csrf_required: unknown
+  polling_required: false
+  streaming_protocol: sse
+  cloudscraper_required: true       # 01.06:52 — TLS/JA3 fingerprint match
+  ip_rotation_header: X-Forwarded-For
+
+  # notes.md lesson #137 — verified CONFIRMED by CORRECTIONS.md §9
+  conversation_continuity: >
+    Preserving conversation_id keeps the same Daytona sandbox session alive and
+    avoids reinstalling packages every turn.
+
+# ==============================================================================
+# PROVIDER-NATIVE AGENT — 30 §15.1
+# ==============================================================================
+agent_module:
+  supported: true
+  type: code_agent
+  state_model: conversation_id      # provider-managed, persists across turns
+  supports_files: true
+  supports_provider_tools: true
+  supports_platform_tools: false
+  supports_streaming: true
+  max_steps: null                   # agent_tool_limit event exists; ceiling UNKNOWN
+  approval_integration: required
+
+  provider_tools:                   # CONFIRMED tools only
+    - bash
+    - python3
+    - image_recognition             # 01.05:1076
+    - fetch_url                     # 01.05:1078
+    - web_search                    # 01.05:1078
+
+  # CORRECTIONS.md §10 — sandbox environment claims had NO evidence
+  sandbox_environment:
+    os: unknown                     # "Ubuntu 22.04 LTS" -> grep -ci ubuntu = 0
+    workdir: unknown                # "/home/daytona/" -> no evidence in code
+    python_version: unknown         # "Python 3.10+" -> no evidence
+    internet_access: unknown
+
+# ==============================================================================
+# SECURITY — 30 §15.4
+# ==============================================================================
+security:
+  provider_side_tools_allowed_by_default: false
+  requires_capability_firewall: true
+  requires_evaluation: true
+  requires_audit: true
+  secrets_in_code: forbidden        # ROUND2 §0 — historic violation, see notes
+  third_party_data_transit: true    # tmpfiles.org — ROUND2 §3
+
+# ==============================================================================
+# ERRORS — 30 §14
+# ==============================================================================
+errors:
+  mapping: notegpt_error_map        # ./errors.py
+  app_code_field: code              # JSON body, arrives with HTTP 200
+
+notes:
+  - "Evidence precedence: CORRECTIONS_ROUND2 > CORRECTIONS > 11 original files (REJECTED)."
+  - "status=disabled: contract tests require live credentials and are stubs."
+  - "UNKNOWN never means false — per CORRECTIONS.md §13."
+  - "Account pool is NOT implemented; only IP/cookie rotation exists."
+  - "File upload currently transits tmpfiles.org, a public third-party host."
