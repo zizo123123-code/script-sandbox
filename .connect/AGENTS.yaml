@@ -1,0 +1,73 @@
+# ============================================================
+# AGENTS.yaml — المصدر الوحيد للحقيقة عن الأيجنتات
+# Protocol-Version مرجعه: .connect/PROTOCOL.md
+# لا تعدل هذا الملف يدوياً — استخدم: python .connect/tools/new_agent.py
+# ============================================================
+schema_version: "1.0"
+protocol_version: "1.0"
+
+# نمط تسمية السكربتات الإلزامي (داخل projects/{slug}/scripts/)
+naming_pattern: "{NN.NN}_{CODE}_{slug}.py"
+naming_rules:
+  - "NN.NN = رقم الإصدار (استخدم next_version.py لحسابه)"
+  - "CODE = اختصار الأيجنت من هذا الملف (حروف كبيرة)"
+  - "slug = وصف قصير بالإنجليزية snake_case"
+  - "أول سطر في أي سكربت جديد: # Based-on: <اسم الملف الأصل أو NONE>"
+
+agents:
+  AG:
+    name: Antigravity
+    status: active
+    role: "محرر أكواد رئيسي — تنفيذ المهام البرمجية الكبيرة"
+    room: ".connect/agents/AG/"
+    previous_codes: []
+    joined: "2026-08-25"
+
+  DS:
+    name: DeepSeek
+    status: active
+    role: "محرر أكواد — تنفيذ متوازي + مراجعة"
+    room: ".connect/agents/DS/"
+    previous_codes: []
+    joined: "2026-08-25"
+
+  GSK:
+    name: Claude/Genspark
+    status: active
+    role: "مهندس المنظومة — الخطة والبنية التحتية والأدوات"
+    room: ".connect/agents/GSK/"
+    previous_codes: []
+    joined: "2026-08-25"
+
+  # ---------- أكواد محجوزة (غير نشطة — لا تنشئ غرفها الآن) ----------
+  GM:
+    name: Gemini
+    status: reserved
+    role: ""
+    room: ""
+    previous_codes: []
+    joined: ""
+
+  GPT:
+    name: ChatGPT
+    status: reserved
+    role: ""
+    room: ""
+    previous_codes: []
+    joined: ""
+
+  CL:
+    name: Claude (standalone)
+    status: reserved
+    role: ""
+    room: ""
+    previous_codes: []
+    joined: ""
+
+  CP:
+    name: Copilot
+    status: reserved
+    role: ""
+    room: ""
+    previous_codes: []
+    joined: ""
