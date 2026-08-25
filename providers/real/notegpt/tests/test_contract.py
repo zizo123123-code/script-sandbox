@@ -177,6 +177,42 @@ def test_quota_exceeded_maps_to_rotation():
     assert normalized.details["recovery"] == "rotate_identity"
 
 
+def test_all_three_auth_codes_recover_by_rotation():
+    """
+    01.06:798 groups all three codes into ONE branch that calls
+    rotate_identity(keep_conversation=True) — it never calls login().
+
+    The category still reflects MEANING (auth vs quota), but the recovery hint
+    must reflect observed BEHAVIOR, with reauthenticate kept as an unverified
+    fallback. This test exists because the first implementation asserted
+    'reauthenticate' for 164003/164002, which the reference code contradicts.
+    """
+    for code in (164019, 164003, 164002):
+        normalized = err.normalize_error(body={"code": code})
+        assert normalized.details["recovery"] == "rotate_identity", (
+            f"code {code} must recover by rotation per 01.06:798"
+        )
+
+
+def test_auth_codes_keep_reauth_as_unverified_fallback():
+    for code in (164003, 164002):
+        details = err.normalize_error(body={"code": code}).details
+        assert details.get("recovery_fallback") == "reauthenticate"
+
+
+def test_mapped_app_codes_carry_evidence():
+    for code in err.APP_CODE_MAP:
+        details = err.normalize_error(body={"code": code}).details
+        assert details.get("evidence"), f"mapped code {code} lacks an evidence tag"
+
+
+def test_auth_and_quota_codes_keep_distinct_categories():
+    """Shared recovery must not collapse the semantic distinction."""
+    assert err.normalize_error(body={"code": 164019}).category == err.QUOTA_EXCEEDED
+    assert err.normalize_error(body={"code": 164003}).category == err.AUTH_EXPIRED
+    assert err.normalize_error(body={"code": 164002}).category == err.INVALID_CREDENTIAL
+
+
 def test_unmapped_app_code_is_not_guessed():
     normalized = err.normalize_error(body={"code": 999999})
     assert normalized.category == err.NON_RETRYABLE_ERROR
