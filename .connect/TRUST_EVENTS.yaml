@@ -1,0 +1,13 @@
+# ============================================================
+# TRUST_EVENTS.yaml — سجل أحداث الثقة الدائم (append-only)
+# ⚠️ لا تعدل الأحداث القديمة — أضف فقط في النهاية.
+# السبب: مزامنة منصة السحابة بتعيد كتابة رسائل commits وبتمسح
+# الـ Trailers، فده المصدر الدائم اللي trust_ledger.py بيقرأ منه.
+# صيغة الحدث: {agent, points, task, note, date}
+# ============================================================
+events:
+  - {agent: GSK, points: 10, task: T-010, note: "نقل NOT_EGPT → projects/ngpt بهيكل قياسي (DQ-001 خيار أ)", date: 2026-08-25}
+  - {agent: GSK, points: 10, task: T-015, note: "أداة trust_ledger.py + سجل الأحداث الدائم", date: 2026-08-25}
+  - {agent: GSK, points: 10, task: T-016, note: "أداة dna_tree.py + بطاقات DNA للسكربتات", date: 2026-08-25}
+  - {agent: GSK, points: 10, task: T-017, note: "أداة doctor.py — كشف 5 أخطاء مزروعة ✅", date: 2026-08-25}
+  - {agent: GSK, points: 10, task: T-018, note: "اختبار قبول V0.15 — الدورة الكاملة نجحت", date: 2026-08-25}
