@@ -1,4 +1,12 @@
 # -*- coding: utf-8 -*-
+# ═══ DNA ═══
+# Gene-ID:    ngpt/01.06_agent-mode
+# Based-On:   ngpt/01.05_LEGACY_agent-mode
+# Generation: 5
+# Author:     AG
+# Mutation:   "Smart Rebase & Live Browser Sync"
+# Status:     verified
+# ═══════════
 """
 ================================================================================
 🤖 NoteGPT Real Agent Sandbox Tester v01.06 (Smart Rebase & Live Browser Sync)
