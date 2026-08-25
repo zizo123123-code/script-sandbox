@@ -1,4 +1,12 @@
 # -*- coding: utf-8 -*-
+# ═══ DNA ═══
+# Gene-ID:    ngpt/01.03_LEGACY_agent-mode
+# Based-On:   ngpt/01.02_LEGACY_agent-mode
+# Generation: 2
+# Author:     LEGACY (ما قبل منظومة Connect)
+# Mutation:   "إضافة المصادر المتعددة (روابط + ملفات) لوضع الأيجنتس"
+# Status:     verified
+# ═══════════
 """
 ================================================================================
 🤖 NoteGPT Real Agent Sandbox Tester v01.03 (وضع الأيجنتس الحقيقي + المصادر المتعددة)
