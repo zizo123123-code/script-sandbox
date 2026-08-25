@@ -17,7 +17,7 @@ One real provider now exists in the tree (`real/notegpt/`), and it is
 
 31 §19.13 — *"Keep provider disabled until tests pass."*
 
-The 44 contract tests in `real/notegpt/tests/test_contract.py` all pass, but
+The 48 contract tests in `real/notegpt/tests/test_contract.py` all pass, but
 they are **offline** tests: manifest shape, capability tri-state, error
 normalization, model catalog, secret redaction, Core isolation. They
 deliberately do not simulate a successful generation (31 §11: *"Do not write
