@@ -101,9 +101,9 @@ class Config:
     MAX_SAVED_PROJECTS: int = 10  # الحد الأقصى للمشاريع المحفوظة (تدوير تلقائي FIFO زي سجل الكاميرات)
     
     # بيانات حساب NoteGPT لتسجيل الدخول وسحب التوكن الحي تلقائياً (15 حصة Sandbox جديدة)
-    EMAIL: str = "um66jywg@emalupe.com"
-    PASSWORD: str = "Password123#$"
-    SESSION_TOKEN: str = "_5aNBxPZqvZnCIwwseqYyCfMeM_WFXB-JLcZnTpZMPI"
+    EMAIL: str = os.environ.get("NOTEGPT_EMAIL", "")
+    PASSWORD: str = os.environ.get("NOTEGPT_PASSWORD", "")
+    SESSION_TOKEN: str = os.environ.get("NOTEGPT_SESSION_TOKEN", "")
     
     # مسارات ملفات المهام والشات المؤتمتة (مربوطة بمجلد السكربت مباشرة لزر Run)
     CHAT_SEND_FILE: str = str(pathlib.Path(__file__).resolve().parent / "chat_send.txt")
