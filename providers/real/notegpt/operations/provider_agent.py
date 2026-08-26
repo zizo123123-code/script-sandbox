@@ -331,11 +331,18 @@ def stream_agent_run(
             yield event
             return
 
-        yield event
+        if etype == parser_mod.EVENT_DONE:
+            if has_content:
+                stream_ended_naturally = True
+                yield event
+                break
+            if boot_pending:
+                # `[DONE]` here closes the scheduling response; it is not the
+                # agent's terminal answer. Do not expose a terminal DONE to the
+                # blocking wrapper before the bounded boot polling phase runs.
+                continue
 
-        if etype == parser_mod.EVENT_DONE and has_content:
-            stream_ended_naturally = True
-            break
+        yield event
 
     # ── T-09: asynchronous sandbox boot wait ────────────────────────────────
     # Entered ONLY when the generation stream produced no content AND did not
@@ -371,8 +378,14 @@ def stream_agent_run(
                 elif b_type == parser_mod.EVENT_CREDIT_USAGE:
                     sess.record_credits(b_event.get("credits"))
                 if b_type == parser_mod.EVENT_DONE:
-                    yield b_event
-                    return
+                    if has_content:
+                        yield b_event
+                        return
+                    # A boot-poll response can also close with `[DONE]` after
+                    # only a scheduling frame. It is a connection boundary,
+                    # not the agent's terminal event; keep polling (or move to
+                    # the real continue loop if a marker was received).
+                    continue
                 yield b_event
             # Content arrived, or the provider asked for a real continue:
             # the boot phase is over either way.

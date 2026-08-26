@@ -36,9 +36,9 @@ contract tests, security review, live verification, and approved enablement.
 
 31 §19.13 — *"Keep provider disabled until tests pass."*
 
-The 144 offline tests in `real/notegpt/tests/` all pass (55 contract, 12
+The 146 offline tests in `real/notegpt/tests/` all pass (55 contract, 12
 auto-continue bound, 23 attachment-payload wiring, 17 async-boot + login-header,
-6 reference-compatibility regressions, 31 repo hygiene). They cover manifest
+8 reference-compatibility regressions, 31 repo hygiene). They cover manifest
 shape, capability four-state honesty, error normalization, model catalog,
 secret redaction, Core isolation, the auto-continue ceiling, session
 pre-registration, request ordering, per-continue headers, recovery refresh,
@@ -102,6 +102,8 @@ left unchanged.
 | D5 | Session pre-registration happened after the first user-facing progress yield | **fixed** | `test_first_progress_event_follows_session_preregistration` |
 | D6 | CLI setup/continue messages were printed after streaming began, corrupting output phases | **fixed** | `__main__.py` gates `sandbox`/`info` output on `phase == "init"` |
 | D7 | Tracked `.pytest_cache` files violated the repository's own ignore policy and kept hygiene red | **fixed** | cache removed from Git tracking; full package suite is green |
+| D8 | Parser dropped the reference wire events `create_sandbox` / `resume_sandbox` and their `data.message` step | **fixed** | Existing `EVENT_SANDBOX(boot_pending=True)` contract now accepts both reference and field-observed variants |
+| D9 | A scheduling `[DONE]` could terminate the blocking wrapper before async boot polling | **fixed** | Scheduling sentinels are suppressed until content or a real terminal event; regression test covers the blocking path |
 
 **Two shortcuts from the reference fix were deliberately NOT adopted:**
 

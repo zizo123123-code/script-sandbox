@@ -71,5 +71,5 @@ providers/real/notegpt/
     ├── test_auto_continue.py        # 12 اختباراً لحدّ الاستئناف
     ├── test_file_infos.py           # 23 اختباراً لأشكال المرفقات
     ├── test_async_boot.py           # 17 اختباراً للإقلاع + هيدرات login
-    ├── test_reference_compatibility.py # 6 اختبارات لسلوك 01.06/Gist
+    ├── test_reference_compatibility.py # 8 اختبارات لسلوك 01.06/Gist
     └── test_repo_hygiene.py         # 31 اختباراً للنظافة والأسرار

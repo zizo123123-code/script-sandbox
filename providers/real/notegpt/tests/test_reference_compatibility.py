@@ -41,6 +41,47 @@ class _HeaderRecorder(mt.MockTransport):
         return super().post(url, **kwargs)
 
 
+def test_reference_boot_event_names_are_not_dropped():
+    """The raw names used by 01.06 must enter the existing sandbox contract."""
+    events = list(parser_mod.iter_events([
+        mt.sse({"type": "create_sandbox", "data": {"message": "initializing_sandbox"}}),
+        mt.sse({"type": "resume_sandbox", "data": {"message": "resume_sandbox"}}),
+    ]))
+
+    assert [event["type"] for event in events] == [
+        parser_mod.EVENT_SANDBOX,
+        parser_mod.EVENT_SANDBOX,
+    ]
+    assert [event["step"] for event in events] == [
+        "initializing_sandbox",
+        "resume_sandbox",
+    ]
+    assert all(event["boot_pending"] is True for event in events)
+
+
+def test_reference_boot_done_sentinel_still_polls_for_answer(monkeypatch):
+    """A scheduling stream's `[DONE]` is not the final agent answer."""
+    monkeypatch.setattr(agent_mod, "CONTINUE_BACKOFF_SECONDS", 0)
+    transport = mt.MockTransport(
+        stream_script=[[
+            mt.sse({"type": "create_sandbox", "data": {"message": "initializing_sandbox"}}),
+            mt.line_done(),
+        ]],
+        continue_script=[
+            [mt.sse({"type": "resume_sandbox", "data": {"message": "resume_sandbox"}}), mt.line_done()],
+            [mt.line_text("10"), mt.line_done()],
+        ],
+    )
+
+    result = agent_mod.run_provider_agent(
+        NoteGPTConfig(),
+        {"prompt": "5+5", "scraper": transport, "session": session_mod.new_session()},
+    )
+
+    assert result["result"]["text"] == "10"
+    assert transport.continue_requests == 2
+
+
 def test_first_progress_event_follows_session_preregistration(monkeypatch):
     """01.06 registers `/api/v2/ai-chat` before exposing the stream status."""
     monkeypatch.setattr(agent_mod, "CONTINUE_BACKOFF_SECONDS", 0)

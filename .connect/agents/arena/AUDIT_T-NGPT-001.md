@@ -82,6 +82,31 @@ files match the repository's own `.gitignore`. This is not a provider behavior
 change, but it blocks the required verification gate and must be removed from
 Git tracking without changing product code.
 
+## Follow-up live-evidence audit (before T-NGPT-002 mutation)
+
+The pasted execution report is consistent with a real parser gap, not proof that
+144 mock tests cover the wire. The reference handles these raw event types in
+`01.06:872-874`:
+
+- `create_sandbox`
+- `resume_sandbox`
+
+The current parser only recognized `start`, `prepare_env`, and
+`prepare_env_done`. A direct offline probe before the follow-up fix showed:
+
+```text
+create_sandbox -> []
+resume_sandbox -> []
+prepare_env    -> EVENT_SANDBOX(boot_pending=True)
+```
+
+Therefore a live `create_sandbox`/`resume_sandbox` frame was dropped, leaving
+`boot_pending` false and allowing the terminal `empty_stream` path. The
+follow-up scope is limited to mapping the two reference event names and their
+`data.message` step field into the existing known `EVENT_SANDBOX` contract, plus
+keeping a scheduling `[DONE]` sentinel from becoming a terminal event before
+that bounded wait. The existing bounded boot wait remains unchanged.
+
 ## Non-deviations deliberately left alone
 
 - `status: disabled` and `is_functional: false` remain locked.
