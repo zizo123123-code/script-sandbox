@@ -159,8 +159,32 @@ class SourceIngestionHandler:
     URL_REGEX = re.compile(r'https?://[^\s<>"\']+', re.IGNORECASE)
 
     @classmethod
-    def get_public_url_for_file(cls, file_path: pathlib.Path) -> str:
-        """الحصول على رابط مباشر وسريع للملف ليتمكن ساندبوكس Daytona من تنزيله وفحصه"""
+    def get_public_url_for_file(cls, file_path: pathlib.Path) -> Optional[str]:
+        """
+        الحصول على رابط مباشر وسريع للملف ليتمكن ساندبوكس Daytona من تنزيله وفحصه.
+
+        يُرجِع None عند فشل الرفع — ولا يختلق رابطاً.
+
+        العيب الذي أُصلح هنا (كان السطر 174)
+        ------------------------------------
+        كان الـ fallback يُرجِع رابطاً مُلفَّقاً:
+            https://cdn.ng-resource.com/product/upload/notegpt/ai-chat/2026/08/25/<name>
+
+        وفيه ثلاث مشاكل، الثالثة هي الأخطر:
+          1. التاريخ `2026/08/25` مثبَّت حرفياً، فالمسار ميت بنيوياً في أي يوم آخر.
+          2. الملف لم يُرفَع إلى ذلك المضيف أصلاً، فالرابط لا يُنزِّل شيئاً.
+             تحقُّق حيّ عند الإصلاح: curl على هذا الرابط أعاد **HTTP 404**.
+          3. القيمة المُعادة نص (truthy). وكل المستهلكين يحرسون بـ
+             `if s.uploaded_url:` (السطور 288 و312 و330 و584)، فكان **فشل**
+             الرفع يُقرأ كـ **نجاح**: يُبنى `files[]` و`fileInfos[]` بحقلي
+             `file_url`/`file_content` يحملان رابطاً ميتاً، ويُطبَع للمستخدم
+             "🌐 رابط الملف المباشر" لرابط 404. الفشل صار صامتاً.
+
+        الإصلاح ليس تحديث التاريخ — تحديثه يُبقي المشكلتين 2 و3. الصواب أن
+        تُبلِّغ الدالة عن الفشل بصدق. `Optional[str]` مع None يجعل حُرّاس
+        `if s.uploaded_url:` القائمة تتصرّف صحيحاً بلا أي تعديل: يُستبعد
+        المرفق من الجسم بدل إرساله برابط ميت.
+        """
         try:
             with open(file_path, "rb") as f:
                 r_up = requests.post("https://tmpfiles.org/api/v1/upload", files={"file": f}, timeout=8)
@@ -168,10 +192,14 @@ class SourceIngestionHandler:
                     url_orig = r_up.json().get("data", {}).get("url", "")
                     if url_orig:
                         return url_orig.replace("tmpfiles.org/", "tmpfiles.org/dl/")
-        except Exception:
-            pass
-        # رابط fallback افتراضي في بيئة NoteGPT CDN
-        return f"https://cdn.ng-resource.com/product/upload/notegpt/ai-chat/2026/08/25/{file_path.name}"
+        except Exception as ex:
+            # لا تُخفِ السبب: الحرس السابق كان `except Exception: pass` فيبدو
+            # فشل الشبكة كأنه نجاح. يُسجَّل الاسم والنوع فقط — لا محتوى ولا أسرار.
+            print(f"⚠️  [رفع المرفق] فشل رفع '{file_path.name}': {type(ex).__name__}")
+            return None
+
+        print(f"⚠️  [رفع المرفق] لم يُعِد المضيف رابطاً صالحاً لـ '{file_path.name}' — سيُستبعد المرفق")
+        return None
 
     @classmethod
     def scan_attachments_folder(cls, folder_path: pathlib.Path) -> List[SourceItem]:
