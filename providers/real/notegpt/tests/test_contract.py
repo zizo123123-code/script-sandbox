@@ -27,6 +27,8 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
 _ROOT = Path(__file__).resolve().parents[4]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
@@ -69,12 +71,19 @@ def test_provider_is_disabled_until_verified():
 # ==============================================================================
 # 18.1 — Capability declaration validation
 # ==============================================================================
-def test_capabilities_are_tri_state():
-    """CORRECTIONS.md §13 — unevidenced capabilities are 'unknown', never False."""
+def test_capabilities_are_never_bare_false():
+    """
+    CORRECTIONS.md §13 — unevidenced capabilities are 'unknown', never False.
+    T-04 adds 'partial' for features that exist upstream but are blocked here.
+
+    (Renamed from `test_capabilities_are_tri_state`: the model is four-state
+    since T-04, and a test name that says "tri" would mislead the next reader.)
+    """
     caps = caps_mod.get_capabilities()
+    allowed = (True, caps_mod.PARTIAL_VALUE, "unknown")
     for name, value in caps.items():
-        assert value is True or value == "unknown", (
-            f"capability '{name}' must be True or 'unknown', got {value!r}"
+        assert value in allowed, (
+            f"capability '{name}' must be one of {allowed}, got {value!r}"
         )
 
 
@@ -83,6 +92,94 @@ def test_confirmed_capabilities_have_evidence():
     for name, info in detailed.items():
         if info["state"] == "CONFIRMED":
             assert info["evidence"], f"CONFIRMED capability '{name}' lacks evidence"
+
+
+# ==============================================================================
+# T-04 — capability honesty: manifest and code are ONE contract
+# ==============================================================================
+def test_blocked_capabilities_are_partial_not_true():
+    """
+    THE regression this guards: `file_upload` and `vision_input` were `True`
+    while `upload_asset()` always returns UNSUPPORTED_CAPABILITY. A True in
+    front of an operation that cannot complete is faked functionality
+    (30 §17 / 31 §4).
+    """
+    caps = caps_mod.get_capabilities()
+    for name in ("file_upload", "vision_input"):
+        assert caps[name] == "partial", (
+            f"'{name}' must be 'partial' — the upload path is blocked"
+        )
+        assert caps_mod.is_partial(name)
+        assert name not in caps_mod.CONFIRMED, f"'{name}' must not be CONFIRMED"
+
+
+def test_every_partial_capability_names_a_blocker():
+    """A 'partial' with no blocker is just a True in disguise."""
+    detailed = caps_mod.get_capabilities_with_evidence()
+    partials = [n for n, i in detailed.items() if i["state"] == "PARTIALLY_SUPPORTED"]
+    assert partials, "expected at least one PARTIALLY_SUPPORTED capability"
+    for name in partials:
+        assert detailed[name]["blocker"], f"partial '{name}' lacks a named blocker"
+        assert caps_mod.get_blocker(name), f"get_blocker('{name}') returned nothing"
+
+
+def test_partial_capability_is_not_routable():
+    """`supports()` gates routing: a blocked capability must never pass it."""
+    assert caps_mod.supports("file_upload") is False
+    assert caps_mod.supports("vision_input") is False
+    assert caps_mod.supports("chat") is True
+
+
+def test_manifest_capabilities_match_code_exactly():
+    """
+    T-04 — the manifest and discovery/capabilities.py must not drift. This is
+    the test that makes them a single contract rather than two copies.
+    """
+    manifest_caps = NoteGPTProvider().get_manifest().get("capabilities")
+    if not manifest_caps:
+        pytest.skip("PyYAML unavailable — manifest not parsed")
+    code_caps = caps_mod.get_capabilities()
+    assert manifest_caps == code_caps, (
+        "manifest.yaml and capabilities.py disagree: "
+        f"{ {k: (manifest_caps.get(k), code_caps.get(k)) for k in set(manifest_caps) | set(code_caps) if manifest_caps.get(k) != code_caps.get(k)} }"
+    )
+
+
+def test_manifest_declares_blocker_for_each_partial():
+    """Every `partial` in the manifest carries a machine-readable blocker."""
+    manifest = NoteGPTProvider().get_manifest()
+    caps = manifest.get("capabilities")
+    if not caps:
+        pytest.skip("PyYAML unavailable — manifest not parsed")
+    blockers = manifest.get("capabilities_blockers", {})
+    for name, value in caps.items():
+        if value == "partial":
+            assert name in blockers, f"manifest '{name}' is partial with no blocker"
+            assert blockers[name].get("blocker"), f"'{name}' blocker is empty"
+
+
+def test_upload_operation_stays_declared_while_capability_is_partial():
+    """
+    The deliberate asymmetry: the OPERATION is reachable (so callers get a
+    normalized error naming the blocker) while the CAPABILITY is honest about
+    being incomplete. Undeclaring the operation would be a different signal.
+    """
+    manifest = NoteGPTProvider().get_manifest()
+    ops = manifest.get("operations")
+    if not ops:
+        pytest.skip("PyYAML unavailable — manifest not parsed")
+    assert ops["upload_asset"] is True
+    assert manifest["capabilities"]["file_upload"] == "partial"
+
+
+def test_upload_asset_error_matches_declared_blocker():
+    """The runtime error must name the same blocker the manifest declares."""
+    from providers.real.notegpt.assets import upload as upload_mod
+
+    result = upload_mod.upload_asset(NoteGPTConfig(), {"file": "/tmp/x.png"})
+    assert result["error"]["category"] == err.UNSUPPORTED_CAPABILITY
+    official = result["error"]["details"]["official_path"]
+    assert official["blocker"] == caps_mod.get_blocker("file_upload")
 
 
 def test_video_generation_is_unknown_not_false():
