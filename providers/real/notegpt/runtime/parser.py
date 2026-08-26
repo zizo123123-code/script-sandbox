@@ -63,6 +63,21 @@ KNOWN_EVENTS = frozenset({
 # App codes that trigger identity rotation — 01.06:798
 ROTATION_CODES = frozenset({164019, 164002, 164003})
 
+# --- Asynchronous sandbox boot frames (T-09) --------------------------------
+# SOURCE: live-runtime observation reported by Agent AG (postmortem §2), NOT
+# 01.06. Tagged accordingly — it is field evidence, not script evidence.
+#
+# The Daytona container boots ASYNCHRONOUSLY. The generation POST returns
+# almost immediately having only *scheduled* the container, and the warm-up
+# frames below arrive on subsequent `agent-stream/continue` connections for
+# ~5-7s before any token appears.
+#
+# None of these type names were in KNOWN_EVENTS, and `iter_events()` ends with
+# a `if etype in KNOWN_EVENTS` filter — so every warm-up frame was dropped
+# without a trace. Verified before this change: 4 warm-up lines in -> 0 events
+# out. The caller could not distinguish "still booting" from "empty stream".
+SANDBOX_BOOT_TYPES = frozenset({"start", "prepare_env", "prepare_env_done"})
+
 # --- 30 §15.3 platform event names -----------------------------------------
 PLATFORM_EVENT_MAP: Dict[str, str] = {
     EVENT_SANDBOX: "provider_agent.started",
@@ -161,6 +176,23 @@ def iter_events(lines: Iterable[bytes | str]) -> Generator[Dict[str, Any], None,
                 "type": EVENT_TOOL_CALL if etype == EVENT_TOOL_CALL else EVENT_TOOL_CALL_RESULT,
                 "tool": event.get("name") or event.get("tool"),
                 "payload": event.get("args") or event.get("output") or event.get("content"),
+            }
+            continue
+
+        # T-09 — asynchronous sandbox boot frames.
+        #
+        # Surfaced as EVENT_SANDBOX (an ALREADY-KNOWN type, so no consumer sees
+        # a new event name) carrying `boot_pending: True`. That flag is
+        # deliberately NOT `continue_needed`: continue_needed drives the T-01
+        # truncation budget of AUTO_CONTINUE_LIMIT=5, and letting boot polls
+        # consume it would spend the evidenced ceiling on container warm-up and
+        # leave nothing for genuine truncation. Boot waiting is a separate
+        # concern with its own separate bound (see provider_agent BOOT_*).
+        if etype in SANDBOX_BOOT_TYPES:
+            yield {
+                "type": EVENT_SANDBOX,
+                "step": event.get("step") or etype,
+                "boot_pending": True,
             }
             continue
 
