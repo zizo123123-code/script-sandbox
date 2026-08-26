@@ -269,3 +269,72 @@ def test_builders_accept_native_field_spellings():
     assert entry["url"] == native["file_url"]
     assert entry["title"] == "c.png"
     assert entry["size"] == 10
+
+
+# ==============================================================================
+# The GENERATION body must carry the stream shape (payload confusion)
+# ==============================================================================
+# The history side was wired and tested, but the generation side handed
+# `request["files"]` straight to `build_stream_payload()`, which copies its
+# argument verbatim. Result: the raw caller dicts went out on the wire with
+# ZERO of the 5 native fields, plus a foreign `type` key whose 10/20 encoding
+# belongs to the history shape. Reproduced before the fix:
+#     keys sent   : ['name', 'size', 'type', 'url']
+#     keys wanted : ['file_content','file_name','file_size','file_url','mime_type']
+# These tests observe the body actually POSTed to the generation endpoint.
+def test_generation_body_uses_the_stream_shape_exactly(config, clean_transport):
+    """Five native fields, and none of the history fields."""
+    _run(config, clean_transport, files=[IMAGE])
+    body = clean_transport.first_stream_payload()
+
+    assert "files" in body, "attachments never reached the generation body"
+    entry = body["files"][0]
+    assert set(entry) == STREAM_FIELDS, f"wrong shape: {sorted(entry)}"
+
+
+def test_generation_body_does_not_leak_caller_or_history_keys(config, clean_transport):
+    """
+    The exact regression: raw caller keys must not survive into the body, and
+    the history `type` code must never appear on the generation side.
+    """
+    _run(config, clean_transport, files=[IMAGE])
+    entry = clean_transport.first_stream_payload()["files"][0]
+
+    assert not (set(entry) & HISTORY_FIELDS), "history shape leaked into generation"
+    for raw_key in ("url", "name", "size", "type"):
+        assert raw_key not in entry, f"raw caller key {raw_key!r} leaked to the wire"
+
+
+def test_generation_body_values_are_mapped_not_just_shaped(config, clean_transport):
+    """A correct shape with wrong values would still be broken."""
+    _run(config, clean_transport, files=[IMAGE])
+    entry = clean_transport.first_stream_payload()["files"][0]
+
+    assert entry["file_url"] == IMAGE["url"]
+    assert entry["file_name"] == IMAGE["name"]
+    assert entry["file_size"] == IMAGE["size"]
+    assert entry["mime_type"] == IMAGE["mime_type"]
+
+
+def test_both_sides_are_wired_from_one_source_in_one_run(config, clean_transport):
+    """
+    The two shapes are built from the SAME attachment in a single run: history
+    gets fileInfos[], generation gets files[], neither borrows the other.
+    """
+    item = _run(config, clean_transport, files=[IMAGE, DOC])
+    stream_files = clean_transport.first_stream_payload()["files"]
+
+    assert len(item["fileInfos"]) == 2 and len(stream_files) == 2
+    assert [f["title"] for f in item["fileInfos"]] == ["a.png", "b.pdf"]
+    assert [f["file_name"] for f in stream_files] == ["a.png", "b.pdf"]
+    assert set(item["fileInfos"][0]) == HISTORY_FIELDS
+    assert set(stream_files[0]) == STREAM_FIELDS
+
+
+def test_no_attachments_omits_files_key_entirely(config, clean_transport):
+    """
+    Compatibility: with no attachments the generation body must stay exactly as
+    before (no empty `files` key introduced by the normalization).
+    """
+    _run(config, clean_transport)
+    assert "files" not in clean_transport.first_stream_payload()
