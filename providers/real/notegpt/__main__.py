@@ -44,8 +44,8 @@ def main() -> None:
     parser.add_argument(
         "prompt",
         nargs="?",
-        default="عرف نفسك في سطرين بالمصري وقولي بتشتغل إزاي.",
-        help="السؤال أو الطلب المراد إرساله",
+        default=None,
+        help="السؤال أو الطلب المراد إرساله مباشرة",
     )
     parser.add_argument(
         "--model", "-m",
@@ -60,7 +60,7 @@ def main() -> None:
     parser.add_argument(
         "--file", "-f",
         default=None,
-        help="مسار ملف نصي يحتوي على السؤال أو الطلب (مثال: -f prompt.txt)",
+        help="مسار ملف نصي مخصص للسؤال (مثال: -f my_prompt.txt)",
     )
     parser.add_argument(
         "--session", "-s",
@@ -70,16 +70,30 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    # 1. تحديد نص السؤال من الملف أو من المعامل
-    prompt_text = args.prompt
+    # 1. تحديد نص السؤال تلقائياً:
+    # أولوية 1: ملف مخصص عبر -f
+    # أولوية 2: نص مباشر ممرر في التيرمينال
+    # أولوية 3: الملف الثابت المخصص داخل مجلد المزود (prompt.txt)
+    default_prompt_file = os.path.join(os.path.dirname(__file__), "prompt.txt")
+    prompt_text = None
+
     if args.file:
         if os.path.exists(args.file):
             with open(args.file, "r", encoding="utf-8", errors="replace") as fh:
                 prompt_text = fh.read().strip()
-            print(f"📂 تم قراءة السؤال من الملف: {args.file}")
+            print(f"📂 تم قراءة السؤال من الملف المحدد: {args.file}")
         else:
             print(f"❌ خطأ: الملف المحدد غير موجود: {args.file}")
             return
+    elif args.prompt:
+        prompt_text = args.prompt
+    elif os.path.exists(default_prompt_file):
+        with open(default_prompt_file, "r", encoding="utf-8", errors="replace") as fh:
+            prompt_text = fh.read().strip()
+        print(f"📂 تم قراءة السؤال تلقائياً من: providers/real/notegpt/prompt.txt")
+
+    if not prompt_text:
+        prompt_text = "عرف نفسك في سطرين بالمصري وقولي بتشتغل إزاي."
 
     # 2. عرض النماذج
     if args.list_models:

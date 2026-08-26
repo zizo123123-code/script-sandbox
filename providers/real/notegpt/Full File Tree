@@ -1,0 +1,68 @@
+🌳 شجرة الهيكل المعماري الشامل (Full File Tree — 55 ملفاً):
+
+
+providers/real/notegpt/
+├── manifest.yaml                    # 📄 إعلان الهوية والموديلات الـ 36 والقدرات الموثقة
+├── provider.py                      # 🔌 الواجهة المعيارية الموحدة للـ Core (BaseProvider Adapter)
+├── config.py                        # ⚙️ الثوابت، النطاق notegpt.io، وإعدادات الجلسة
+├── client.py                        # 🌐 عميل الشبكة (cloudscraper + تدوير IP تلقائي)
+├── errors.py                        # ⚠️ تعريف وترجمة الأخطاء المعيارية للمزود
+│
+├── runtime/                         # 🚀 محرك التشغيل ومعالجة البروتوكول
+│   ├── __init__.py
+│   ├── request.py                   # بناء ريكويست البث /api/v2/chat/stream والاستئناف
+│   ├── session.py                   # إدارة كوكيز user_token و anonymous_user_id
+│   ├── auth.py                      # التحقق وفحص وتجديد الصلاحية
+│   ├── parser.py                    # معالجة أحداث الـ SSE الـ 13 (text, tool_call, etc.)
+│   └── errors.py                    # ترجمة أكواد التطبيق (100000 نجاح، 164019 نفاد الحصة)
+│
+├── account/                         # 👤 دورة حياة الحسابات
+│   ├── __init__.py
+│   ├── manager.py                   # مدير الحسابات
+│   ├── create.py                    # إنشاء الحساب إن وجد
+│   ├── refresh.py                   # تجديد الجلسة
+│   ├── validate.py                  # التحقق من صلاحية user_token
+│   ├── update.py
+│   └── delete.py
+│
+├── discovery/                       # 🔍 اكتشاف الموديلات والقدرات تلقائياً
+│   ├── __init__.py
+│   ├── models.py                    # قراءة الـ 36 نموذجاً الحقيقية من notegpt_catalog.json
+│   ├── capabilities.py              # مصفوفة القدرات المصنفة (CONFIRMED / UNKNOWN)
+│   └── limits.py                    # حدود الـ 10 RPM والكوتا اليومية
+│
+├── operations/                      # ⚡ العمليات والتوليد الفعلي
+│   ├── __init__.py
+│   ├── text_generation.py           # التوليد والبث المباشر (Chat Streaming)
+│   ├── provider_agent.py            # ساندبوكس دايتونا لينكس والأدوات كـ Module مستقل
+│   ├── vision_analysis.py           # تحليل الصور المرفقة
+│   ├── audio_stt.py                 # [Stub نظيف]
+│   ├── audio_tts.py                 # [Stub نظيف]
+│   ├── embeddings.py                # [Stub نظيف]
+│   ├── image_generation.py          # [Stub نظيف]
+│   ├── moderation.py                # [Stub نظيف]
+│   └── rerank.py                    # [Stub نظيف]
+│
+├── assets/                          # 📤 إدارة الملفات والمرفقات
+│   ├── __init__.py
+│   ├── upload.py                    # رفع الصور ذو الخطوتين عبر توقيع Alibaba OSS
+│   └── download.py                  # تحميل وحفظ المخرجات من الساندبوكس
+│
+├── pool/                            # 🏊 إدارة حوض الحسابات والتأجير والتدوير
+│   ├── __init__.py
+│   ├── manager.py                   # مدير الحسابات والتدوير التلقائي
+│   ├── selector.py                  # اختيار الحساب الجاهز
+│   ├── lease.py                     # تأجير الحساب للطلب
+│   ├── lifecycle.py                 # دورة حياة الحساب
+│   ├── usage.py                     # تتبع استهلاك الكريديت
+│   ├── cooldown.py                  # تبريد الحساب عند استلام 164019
+│   └── health.py                    # فحص جاهزية الحساب
+│
+├── provider_health/                 # 🩺 مراقبة صحة واستقرار المزود العام
+│   ├── __init__.py
+│   ├── monitor.py                   # فحص الاستجابة عبر GET /api/v2/plan-quota
+│   └── circuit_breaker.py           # قاطع الدائرة (Circuit Breaker) عند سقوط الخدمة
+│
+└── tests/                           # 🧪 جناح اختبارات العقد المعماري (Contract Tests)
+    ├── __init__.py
+    └── test_contract.py             # 48 اختباراً شاملاً للعقد المعماري (48/48 PASS)
