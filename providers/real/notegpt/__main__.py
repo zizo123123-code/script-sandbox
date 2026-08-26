@@ -122,12 +122,22 @@ def main() -> None:
     print("🚀 NoteGPT Direct CLI Runner — تشغيل المزود ذاتياً")
     print("=" * 75)
 
-    # 3. تأمين بيانات الحساب من البيئة أو الافتراضية
-    if not os.environ.get("NOTEGPT_SESSION_TOKEN"):
-        os.environ["NOTEGPT_SESSION_TOKEN"] = "sIoRuVKm5Wn5QavHKTdcsPhzhRqTq2vdR2txIJyOx4o"
-    if not os.environ.get("NOTEGPT_EMAIL"):
-        os.environ["NOTEGPT_EMAIL"] = "jiqzqgda@emalupe.com"
-        os.environ["NOTEGPT_PASSWORD"] = "Password123#$"
+    # 3. بيانات الحساب — من البيئة فقط (30 §2 · 31 §19.5)
+    #
+    # P1 — كانت هذه الكتلة تحقن توكن جلسة حيّاً + إيميلاً + كلمة مرور **مكتوبة
+    # حرفياً** في ملف متتبَّع بـ git. هذا نفس النمط الذي أحصاه ROUND2 §0 في
+    # `projects/ngpt/` (29 سراً) والذي يوجد `config.py` كله لمنعه: الحزمة تقرأ
+    # الاعتماد من البيئة فقط، ثم كان هذا الـ entrypoint يعيد إدخاله من الخلف.
+    #
+    # لا تُعَد قيمة افتراضية بديلة: غياب الاعتماد حالة صالحة (المزوّد يعمل
+    # كضيف مجهول — 01.06:519)، والمستخدم يُبلَّغ بوضوح بدل أن يُسنَد سراً إلى
+    # حساب شخص آخر دون علمه.
+    if not NoteGPTConfig().has_credentials:
+        print(
+            "ℹ️  لا توجد بيانات اعتماد في البيئة — التشغيل كضيف مجهول.\n"
+            "    للتشغيل بحساب: صدّر NOTEGPT_SESSION_TOKEN، أو "
+            "NOTEGPT_EMAIL + NOTEGPT_PASSWORD."
+        )
 
     # 3. استرجاع أو إنشاء جلسة المحادثة (Active Session)
     session_id = args.session
