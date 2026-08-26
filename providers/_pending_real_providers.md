@@ -17,8 +17,9 @@ One real provider now exists in the tree (`real/notegpt/`), and it is
 
 31 §19.13 — *"Keep provider disabled until tests pass."*
 
-The 84 offline tests in `real/notegpt/tests/` all pass (55 contract, 12
-auto-continue bound, 17 attachment-payload wiring). They cover manifest shape,
+The 101 offline tests in `real/notegpt/tests/` all pass (55 contract, 12
+auto-continue bound, 17 attachment-payload wiring, 17 async-boot + login-header).
+They cover manifest shape,
 capability four-state honesty, error normalization, model catalog, secret
 redaction, Core isolation, the auto-continue ceiling, and session
 pre-registration. They deliberately do not simulate a successful generation
@@ -53,6 +54,36 @@ listed with the evidence that proves the fix, not merely marked "done".
 | T-07 | `except Exception: pass` at `session.py:157` made every pre-registration failure invisible | **fixed** | Now a `logging.warning` with exception type + endpoint + attachment count. Control flow unchanged (still non-fatal). Restoring the silent handler fails 2 tests |
 | T-08 | Findings not reflected in documentation | **fixed** | This section |
 
+### Live-runtime round (T-09 / T-10)
+
+Source: live-runtime report from Agent AG (Daytona async sandbox postmortem).
+**Evidence class: FIELD observation, not `01.06` script evidence** — these two
+defects cannot be re-derived from the reference script, so they are tagged
+distinctly from every other row in the table above.
+
+| ID | Finding | State | Evidence |
+|---|---|---|---|
+| T-09 | **Async sandbox boot invisible.** The Daytona container boots asynchronously (~5-7s); the generation POST only *schedules* it and warm-up frames (`start`, `prepare_env`, `prepare_env_done`) arrive on later `agent-stream/continue` connections. None of those type names were in `KNOWN_EVENTS`, and `iter_events()` ends with an `if etype in KNOWN_EVENTS` filter — measured: **4 warm-up lines in → 0 events out**. No `continue_needed` was produced either, so `while continue_needed:` was never entered: the run ended with zero content *and no error*, indistinguishable from an empty answer | **fixed** | Boot frames surface as the already-known `EVENT_SANDBOX` carrying `boot_pending: True`; a separately-bounded boot-wait phase polls through the window. 17 tests in `test_async_boot.py`. Mutation: reverting the parser kills 6 tests; mapping boot frames to `continue_needed` kills 5 |
+| T-10 | **Login was the only un-rotated request.** `auth.login()` hand-rolled its header dict and omitted the IP-rotation trio, so it alone drew app code `164010`. Measured: `build_headers()` = 10 keys incl. `client-ip`/`x-forwarded-for`/`x-real-ip`; `login()` = 5 keys, all three missing | **fixed** | `login()` now derives from `build_headers()` (single definition of the rotation set, so the paths cannot drift), layering only its own `content-type` + `/login` referer. Mutation: restoring the hand-rolled dict kills 3 tests |
+
+**Two shortcuts from the reference fix were deliberately NOT adopted:**
+
+1. **Raising `auto_continue_limit` to 20.** That silently repeals the
+   script-evidenced ceiling of 5 (01.06:104) which T-01 was opened to restore,
+   and makes container warm-up spend the *truncation* budget — a slow boot would
+   then abort a perfectly healthy answer. Boot waiting instead has its own
+   `BOOT_POLL_LIMIT = 12`, and boot polls do **not** touch
+   `sess.continue_calls`. Guarded by `test_boot_polling_does_not_consume_the_truncation_budget`
+   and `test_boot_bound_is_independent_of_the_truncation_ceiling`; mutation
+   (limit → 20 + unified bound) kills **7** tests.
+2. **Persisting the session token to `active_token.txt`.** A plaintext
+   credential written next to the source, in a repo whose `.gitignore` has **no**
+   token/secret pattern — one `git add -A` commits a live session token.
+   This directly contradicts onboarding item 5 (env-only credentials, currently
+   *done* and test-guarded). **Rejected; not implemented.** If login
+   rate-limiting needs mitigation beyond IP rotation, it must use the existing
+   env-var path or an explicitly reviewed secret store.
+
 ### Still open — NOT fixed by T-V05-001
 
 - **Upload path (the root blocker).** The official `POST /api/v1/upload/sign-url`
@@ -73,7 +104,15 @@ listed with the evidence that proves the fix, not merely marked "done".
   non-native shape); the tests added here would catch a regression on the
   existing path, but not a brand-new caller. **Deferred, needs scope approval.**
 - **Live verification** of every path above (see the activation list) still
-  requires real credentials; all 84 tests are offline by design.
+  requires real credentials; all 101 tests are offline by design.
+- **T-09/T-10 rest on second-hand field evidence.** Both were reproduced and
+  fixed against the *reported* wire behaviour, not against a live service this
+  agent observed. The reported boot window (5-7s) and frame names are taken on
+  trust; `BOOT_POLL_LIMIT = 12` is a ~2x margin over that unverified figure.
+  A live run must confirm the frame names and the timing. **Unverified upstream
+  input — do not treat the numbers as evidenced.**
+- **The reported CLI timing (6.8s) was not reproduced here** and is not claimed:
+  it depends on live credentials this agent does not have.
 
 ---
 
@@ -89,7 +128,7 @@ listed with the evidence that proves the fix, not merely marked "done".
 | 6 | Implement health check | done — reports `SUSPENDED` while disabled |
 | 7 | Implement error normalization | done — 12 spec categories, app-code precedence over HTTP 200 |
 | 8 | Rate/limit behavior if known | partial — fabricated numbers reported as `unknown`; only `AUTO_CONTINUE_LIMIT=5` is evidenced |
-| 9 | Contract tests per declared capability | **pending live** — offline tests done (84 pass); auto-continue bound + both attachment payload shapes now covered |
+| 9 | Contract tests per declared capability | **pending live** — offline tests done (101 pass); auto-continue bound, both attachment payload shapes, async sandbox boot + login header rotation now covered |
 | 10 | Security checks for secrets and tenant isolation | **pending review** |
 | 11 | Register provider in Provider Registry | **pending** — no registry module exists in this repo yet |
 | 12 | Register model/provider bindings | done in-provider — 36 models, 7 phantoms excluded |
