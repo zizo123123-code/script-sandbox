@@ -149,13 +149,14 @@ def stream_agent_run(
     )
     # T-03 (payload confusion) — the two attachment shapes must not be crossed.
     # `request["files"]` holds caller-facing dicts ({url, name, type, size}).
-    # `build_stream_payload()` copies whatever it is handed straight into the
-    # body, so passing the raw list shipped ZERO of the 5 native stream fields
-    # and leaked a foreign `type` key whose 10/20 encoding belongs to the
-    # *history* shape. Normalize here, at the single call site that owns the
-    # generation body:
     #   stream  files[]     -> build_stream_files_payload()  (file_name, ...)
     #   history fileInfos[] -> build_history_file_infos()    (type, url_type, ...)
+    #
+    # The normalization below is now REDUNDANT-BUT-HARMLESS: as of the T-03b
+    # root fix, `build_stream_payload()` normalizes internally, so the invariant
+    # no longer depends on this call site remembering to. It is kept because the
+    # conversion is idempotent (once == twice) and because it keeps the intent
+    # explicit at the point where caller attachments enter the generation path.
     sources = request.get("files")
     payload = request_mod.build_stream_payload(
         config,
