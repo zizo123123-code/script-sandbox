@@ -1,0 +1,7 @@
+type: CLAIM
+agent: GSK
+target: T-V05-001
+created: 2026-08-26T07:49:03+00:00
+expires: 2026-08-26T13:49:03+00:00
+ttl_hours: 6.0
+note: ""
