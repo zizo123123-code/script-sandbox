@@ -156,11 +156,16 @@ def request_signed_url(config: NoteGPTConfig, filename: str, file_size: int) -> 
 # built by two different functions. Using one where the other belongs sends a
 # structurally invalid body that the provider silently ignores.
 #
-#   stream `files[]`        01.06:273-296  build_native_files_payload
+#   stream `files[]`        01.06:273-296  build_stream_files_payload()
 #       {file_name, file_size, file_url, file_content, mime_type}
 #
-#   history `fileInfos[]`   01.06:580-594  _build_file_infos_for_history
+#   history `fileInfos[]`   01.06:580-594  build_history_file_infos()
 #       {type, url_type, url, title, size, origin_url, transcriptUrl}
+#
+# NOTE: `build_native_files_payload()` is a DEPRECATED ALIAS of the *history*
+# builder despite its name suggesting the stream shape. This comment used to
+# map it to stream `files[]`, which is precisely the confusion that made the
+# generation body ship raw caller dicts. Do not reintroduce that mapping.
 #
 # This module owns both schemas; callers must not hand-assemble either.
 # ==============================================================================
