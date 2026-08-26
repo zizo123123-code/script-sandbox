@@ -45,6 +45,30 @@ from ..runtime import session as session_mod
 # (01.06:890-908). Named so tests can patch it instead of sleeping for real.
 CONTINUE_BACKOFF_SECONDS = 1
 
+# --- Asynchronous sandbox boot (T-09) ---------------------------------------
+# SOURCE: live-runtime observation reported by Agent AG (postmortem §2), NOT
+# 01.06. Field evidence, tagged distinctly from script-evidenced constants.
+#
+# The container boots asynchronously over ~5-7s, during which
+# `agent-stream/continue` returns only warm-up frames (or nothing at all).
+#
+# This bound is SEPARATE from AUTO_CONTINUE_LIMIT on purpose. Those two waits
+# answer different questions:
+#
+#   AUTO_CONTINUE_LIMIT = 5  -> "the answer was TRUNCATED, fetch the rest"
+#                               (01.06:104, script-evidenced, must stay 5)
+#   BOOT_POLL_LIMIT          -> "the container is not up YET, wait for it"
+#                               (field-observed 5-7s)
+#
+# Sharing one budget would let a 7s boot spend the entire truncation ceiling
+# before the first token, then abort a perfectly healthy run. The reference
+# workaround of raising auto_continue_limit to 20 is exactly that mistake: it
+# silently repeals the evidenced ceiling that T-01 was opened to restore.
+#
+# 12 * 1s = 12s, roughly 2x the observed worst case, so a slow boot survives
+# while a permanently dead sandbox still terminates.
+BOOT_POLL_LIMIT = 12
+
 
 def _open_stream(
     config: NoteGPTConfig,
@@ -161,6 +185,10 @@ def stream_agent_run(
     has_content = False
     # T-01 — auto-continue is entered ONLY if the provider actually asked for it.
     continue_needed = False
+    # T-09 — the generation POST only SCHEDULES the async container; warm-up
+    # frames mean "not up yet", which is not the same as "finished".
+    boot_pending = False
+    stream_ended_naturally = False
 
     for event in parser_mod.iter_events(response.iter_lines()):
         etype = event.get("type")
@@ -212,6 +240,11 @@ def stream_agent_run(
             has_content = True
         elif etype == parser_mod.EVENT_CONTINUE_NEEDED:
             continue_needed = True
+        elif etype == parser_mod.EVENT_SANDBOX and event.get("boot_pending"):
+            # T-09 — container still warming up. Recorded, but NOT translated
+            # into `continue_needed`: that flag spends the T-01 truncation
+            # budget, and boot waiting has its own bound.
+            boot_pending = True
 
         if etype == parser_mod.EVENT_ERROR:
             normalized = runtime_errors.parse_stream_error(event)
@@ -224,7 +257,69 @@ def stream_agent_run(
         yield event
 
         if etype == parser_mod.EVENT_DONE and has_content:
+            stream_ended_naturally = True
             break
+
+    # ── T-09: asynchronous sandbox boot wait ────────────────────────────────
+    # Entered ONLY when the generation stream produced no content AND did not
+    # end naturally — i.e. the container was still booting. Bounded by
+    # BOOT_POLL_LIMIT, which is deliberately NOT the T-01 ceiling, and it does
+    # NOT touch `sess.continue_calls`, so the truncation budget is untouched
+    # and the T-01 tests keep asserting the same numbers.
+    #
+    # NOTE (contrast with the reference fix): the report's approach was to
+    # remove the `break` on sandbox frames so one connection could be drained
+    # to its tail. That conflates two things — draining a connection, and
+    # re-polling after the container wakes. It also removes the guard that
+    # stops a stream from being read past its natural end. Boot waiting is
+    # handled here as its own explicitly-bounded phase instead.
+    if not has_content and not stream_ended_naturally and boot_pending:
+        boot_polls = 0
+        while boot_polls < BOOT_POLL_LIMIT:
+            boot_polls += 1
+            time.sleep(CONTINUE_BACKOFF_SECONDS)
+            saw_boot_frame = False
+            for b_event in _continue_stream(config, scraper, sess, ctx):
+                b_type = b_event.get("type")
+                if b_type == parser_mod.EVENT_SANDBOX and b_event.get("boot_pending"):
+                    saw_boot_frame = True
+                    yield b_event
+                    continue
+                if b_type in (parser_mod.EVENT_TEXT, parser_mod.EVENT_REASONING):
+                    has_content = True
+                elif b_type == parser_mod.EVENT_CONTINUE_NEEDED:
+                    continue_needed = True
+                elif b_type == parser_mod.EVENT_TOOL_CALL:
+                    sess.record_tool(b_event.get("tool"))
+                elif b_type == parser_mod.EVENT_CREDIT_USAGE:
+                    sess.record_credits(b_event.get("credits"))
+                if b_type == parser_mod.EVENT_DONE:
+                    yield b_event
+                    return
+                yield b_event
+            # Content arrived, or the provider asked for a real continue:
+            # the boot phase is over either way.
+            if has_content or continue_needed:
+                break
+            if not saw_boot_frame:
+                # Neither boot frame nor content. Nothing left to wait for;
+                # do not spin silently to the bound.
+                break
+        else:
+            # Bound exhausted while still only seeing warm-up frames.
+            yield {
+                "type": parser_mod.EVENT_ERROR,
+                "normalized_error": err.ProviderError(
+                    category=err.PROVIDER_UNAVAILABLE,
+                    retryable=True,
+                    provider_code="sandbox_boot_timeout",
+                    safe_message=(
+                        "Provider sandbox did not finish booting within "
+                        f"{BOOT_POLL_LIMIT}s."
+                    ),
+                ).to_dict(),
+            }
+            return
 
     # 🔄 Auto-continue loop (01.06:890-908) to fetch reasoning and complete answer until [DONE]
     #
