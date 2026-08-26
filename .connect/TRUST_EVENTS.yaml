@@ -11,3 +11,5 @@ events:
   - {agent: GSK, points: 10, task: T-016, note: "أداة dna_tree.py + بطاقات DNA للسكربتات", date: 2026-08-25}
   - {agent: GSK, points: 10, task: T-017, note: "أداة doctor.py — كشف 5 أخطاء مزروعة ✅", date: 2026-08-25}
   - {agent: GSK, points: 10, task: T-018, note: "اختبار قبول V0.15 — الدورة الكاملة نجحت", date: 2026-08-25}
+  - {agent: GSK, points: 10, task: T-019, note: "إعادة كتابة 29 سراً في projects/ngpt → os.environ (الماسح 29→0، الأرشيف يعمل)", date: 2026-08-26}
+  - {agent: GSK, points: 10, task: T-020, note: "حاجز anti-regression للأرشيف + .env.example (mutation-verified بطفرتين)", date: 2026-08-26}
