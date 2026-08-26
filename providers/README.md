@@ -124,8 +124,10 @@ Two further findings are worth calling out, because both are cases where the
   **`tmpfiles.org`** — a public third-party host — making user files publicly
   reachable. `upload.py` therefore refuses by default and requires an explicit
   `allow_third_party_transit=True` opt-in rather than quietly exfiltrating data.
-- **`164003` and `164002` recover by rotation, not re-login.** `01.06:798`
-  groups all three app codes into a single branch calling
-  `rotate_identity(keep_conversation=True)`; it never calls `login()`. The
-  categories still distinguish quota from auth, but the recovery hint follows
-  observed behavior, with `reauthenticate` recorded as an unverified fallback.
+- **`164003` and `164002` recover through identity rotation while preserving the
+  conversation.** `01.06:798` groups all three app codes into one branch
+  calling `rotate_identity(keep_conversation=True)`; that reference operation
+  refreshes login credentials when email/password are available and carries the
+  resulting `user_token`/`nc_token` cookies. The normalized categories still
+  distinguish quota from auth, while the recovery hint names the rotation
+  operation.

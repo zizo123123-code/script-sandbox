@@ -88,14 +88,15 @@ APP_CODE_MAP: Dict[int, Dict[str, Any]] = {
     # HAR x8 · body says literally "login expired" — arrives with HTTP 200
     #
     # NOTE ON RECOVERY: the category is AUTH_EXPIRED because that is what the
-    # code MEANS, but the recovery hint is rotate_identity because that is what
-    # the reference implementation actually DOES. 01.06:798 groups all three
-    # codes into one branch:
+    # code MEANS, while the normalized recovery hint remains rotate_identity.
+    # 01.06:798 groups all three codes into one identity-recovery branch:
     #     elif code in [164019, 164002, 164003]:
     #         self.rotate_identity(keep_conversation=True)
-    # It never calls login() on this path. Re-authentication is the intuitive
-    # response and may well be correct, but it is unverified, so it is recorded
-    # as a fallback rather than promoted to the primary recovery.
+    # The reference identity rotation attempts login_and_refresh_token() when
+    # email/password credentials are available, then rebuilds the cookie state.
+    # The normalized hint names the recovery operation, not its internal auth
+    # steps; the fallback is retained as evidence metadata for callers that
+    # operate with a session token only.
     164003: {
         "category": AUTH_EXPIRED,
         "retryable": True,

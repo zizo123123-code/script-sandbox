@@ -49,6 +49,7 @@ auth:
     companions:
       - anonymous_user_id          # 01.05:484
       - sbox-guid                  # 01.05:485
+      - nc_token                    # 01.06:544 — login companion cookie
   header_alternative: "Authorization: Bearer <token>"   # 01.05:573
 
   login_endpoint: /api/v1/auth/email/login              # 01.05:117 / 01.06:109

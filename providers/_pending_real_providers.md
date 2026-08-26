@@ -36,13 +36,14 @@ contract tests, security review, live verification, and approved enablement.
 
 31 §19.13 — *"Keep provider disabled until tests pass."*
 
-The 133 offline tests in `real/notegpt/tests/` all pass (55 contract, 12
+The 144 offline tests in `real/notegpt/tests/` all pass (55 contract, 12
 auto-continue bound, 23 attachment-payload wiring, 17 async-boot + login-header,
-26 repo hygiene). They cover manifest shape,
-capability four-state honesty, error normalization, model catalog, secret
-redaction, Core isolation, the auto-continue ceiling, and session
-pre-registration. They deliberately do not simulate a successful generation
-(31 §11: *"Do not write tests that pretend generation works."*).
+6 reference-compatibility regressions, 31 repo hygiene). They cover manifest
+shape, capability four-state honesty, error normalization, model catalog,
+secret redaction, Core isolation, the auto-continue ceiling, session
+pre-registration, request ordering, per-continue headers, recovery refresh,
+and response draining. They deliberately do not simulate a successful live
+generation (31 §11: *"Do not write tests that pretend generation works."*).
 
 Activation therefore still requires:
 
@@ -84,6 +85,23 @@ distinctly from every other row in the table above.
 |---|---|---|---|
 | T-09 | **Async sandbox boot invisible.** The Daytona container boots asynchronously (~5-7s); the generation POST only *schedules* it and warm-up frames (`start`, `prepare_env`, `prepare_env_done`) arrive on later `agent-stream/continue` connections. None of those type names were in `KNOWN_EVENTS`, and `iter_events()` ends with an `if etype in KNOWN_EVENTS` filter — measured: **4 warm-up lines in → 0 events out**. No `continue_needed` was produced either, so `while continue_needed:` was never entered: the run ended with zero content *and no error*, indistinguishable from an empty answer | **fixed** | Boot frames surface as the already-known `EVENT_SANDBOX` carrying `boot_pending: True`; a separately-bounded boot-wait phase polls through the window. 17 tests in `test_async_boot.py`. Mutation: reverting the parser kills 6 tests; mapping boot frames to `continue_needed` kills 5 |
 | T-10 | **Login was the only un-rotated request.** `auth.login()` hand-rolled its header dict and omitted the IP-rotation trio, so it alone drew app code `164010`. Measured: `build_headers()` = 10 keys incl. `client-ip`/`x-forwarded-for`/`x-real-ip`; `login()` = 5 keys, all three missing | **fixed** | `login()` now derives from `build_headers()` (single definition of the rotation set, so the paths cannot drift), layering only its own `content-type` + `/login` referer. Mutation: restoring the hand-rolled dict kills 3 tests |
+
+## Reference-compatibility repair (T-NGPT-001)
+
+Source: supplied Gist `6c5110b4e0adf0756a91d20c4485771b`, checked against the
+complete `projects/ngpt/scripts/01.06_notegpt_agent_mode.py` and the SPEC.
+Only runtime behavior was repaired; the architecture and public signatures were
+left unchanged.
+
+| ID | Deviation found | State | Guard |
+|---|---|---|---|
+| D1 | The continue-loop broke on `continue_needed`, dropping later events in the same response | **fixed** | `test_continue_response_is_drained_after_continue_marker` |
+| D2 | Continue requests reused one stale auth context instead of rebuilding the reference headers per request | **fixed** | `test_each_continue_request_gets_fresh_ip_headers` |
+| D3 | Recoverable app codes rotated IDs but skipped the reference auth refresh when credentials were available | **fixed** | `test_recovery_refreshes_token_and_keeps_conversation` |
+| D4 | The observed `nc_token` companion cookie was not retained after login | **fixed** | `test_login_preserves_distinct_nc_token_cookie` |
+| D5 | Session pre-registration happened after the first user-facing progress yield | **fixed** | `test_first_progress_event_follows_session_preregistration` |
+| D6 | CLI setup/continue messages were printed after streaming began, corrupting output phases | **fixed** | `__main__.py` gates `sandbox`/`info` output on `phase == "init"` |
+| D7 | Tracked `.pytest_cache` files violated the repository's own ignore policy and kept hygiene red | **fixed** | cache removed from Git tracking; full package suite is green |
 
 **Two shortcuts from the reference fix were deliberately NOT adopted:**
 

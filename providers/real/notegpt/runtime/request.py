@@ -21,6 +21,7 @@ from typing import Any, Dict, Optional
 from ..assets import upload as upload_mod
 from ..config import (
     COOKIE_ANON,
+    COOKIE_NC,
     COOKIE_PRIMARY,
     COOKIE_SBOX,
     NoteGPTConfig,
@@ -67,12 +68,15 @@ def build_cookies(
     session_token: Optional[str] = None,
     anon_user_id: Optional[str] = None,
     sbox_guid: Optional[str] = None,
+    nc_token: Optional[str] = None,
 ) -> Dict[str, str]:
     """
     Cookie jar shape from 01.06:476-481.
 
     CORRECTIONS.md §1: the primary cookie is `user_token`. The original
     inventory claimed `session_token` / `__session` — both are wrong.
+    The reference login also carries `nc_token`, falling back to the fresh
+    access token when the scraper did not set a separate value.
     """
     cookies = {
         COOKIE_ANON: anon_user_id or str(uuid.uuid4()),
@@ -80,6 +84,7 @@ def build_cookies(
     }
     if session_token:
         cookies[COOKIE_PRIMARY] = session_token
+        cookies[COOKIE_NC] = nc_token or session_token
     return cookies
 
 

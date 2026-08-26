@@ -100,6 +100,41 @@ def _open_stream(
     return response, None
 
 
+def _recover_identity(
+    config: NoteGPTConfig,
+    scraper: Any,
+    sess: session_mod.ConversationSession,
+) -> Dict[str, Any]:
+    """Rotate provider identity and refresh auth without replacing conversation state.
+
+    01.06's `rotate_identity()` generates new anonymous/sandbox identifiers,
+    calls `login_and_refresh_token()` when email/password credentials exist,
+    then rebuilds the cookie context. The provider package keeps those concerns
+    behind runtime modules while preserving the same conversation_id.
+    """
+    sess.rotate_identity(keep_conversation=True)
+
+    refresh_error: Optional[Dict[str, Any]] = None
+    if config.email and config.password:
+        _, refresh_error = auth_mod.refresh_session(config, scraper=scraper)
+        if refresh_error:
+            # Match the reference's non-fatal recovery behavior: retry with the
+            # current token/identity context, but make the degraded refresh
+            # diagnosable without logging credentials or response bodies.
+            _LOG.warning(
+                "identity recovery login failed (category=%s, provider_code=%s); "
+                "retrying with current session context",
+                refresh_error.get("category"),
+                refresh_error.get("provider_code"),
+            )
+
+    return auth_mod.build_auth_context(
+        config,
+        anon_user_id=sess.anon_user_id,
+        sbox_guid=sess.sbox_guid,
+    )
+
+
 def stream_agent_run(
     config: NoteGPTConfig,
     request: Dict[str, Any],
@@ -196,14 +231,17 @@ def stream_agent_run(
         files=upload_mod.build_stream_files_payload(sources) if sources else None,
     )
 
-    yield {"type": parser_mod.EVENT_SANDBOX, "step": "initializing_sandbox"}
-
     # 01.06:741 — Pre-register chat session on NoteGPT /api/v2/ai-chat.
     # T-03: the caller's attachments must reach the history record too; passing
     # them lets session.py build the native `fileInfos[]` instead of sending [].
+    # The reference performs this before exposing the initial progress event and
+    # before opening the generation stream. Keep that request order without
+    # changing the best-effort/non-fatal registration contract.
     session_mod.create_chat_session(
         config, scraper, sess, prompt, ctx, sources=request.get("files")
     )
+
+    yield {"type": parser_mod.EVENT_SANDBOX, "step": "initializing_sandbox"}
 
     response, open_error = _open_stream(config, scraper, config.url("chat_stream"), payload, ctx)
     if open_error:
@@ -236,12 +274,7 @@ def stream_agent_run(
                 }
                 return
             rotated_once = True
-            sess.rotate_identity(keep_conversation=True)
-            ctx = auth_mod.build_auth_context(
-                config,
-                anon_user_id=sess.anon_user_id,
-                sbox_guid=sess.sbox_guid,
-            )
+            ctx = _recover_identity(config, scraper, sess)
             response, retry_error = _open_stream(
                 config, scraper, config.url("chat_stream"), payload, ctx
             )
@@ -259,6 +292,20 @@ def stream_agent_run(
                     has_content = True
                 elif sub_etype == parser_mod.EVENT_CONTINUE_NEEDED:
                     continue_needed = True
+                    # Continue draining this retry response; the marker does
+                    # not license cutting off later text/reasoning chunks.
+                    yield sub_ev
+                    continue
+                if sub_etype == parser_mod.EVENT_ERROR:
+                    normalized = runtime_errors.parse_stream_error(sub_ev)
+                    if normalized:
+                        sub_ev["normalized_error"] = normalized
+                        sess.error_encountered = normalized.get("category")
+                    yield sub_ev
+                    return
+                if sub_etype == parser_mod.EVENT_DONE:
+                    yield sub_ev
+                    return
                 yield sub_ev
             break
 
@@ -383,17 +430,42 @@ def stream_agent_run(
         }
         time.sleep(CONTINUE_BACKOFF_SECONDS)
 
-        # Re-evaluated per response: only a fresh `continue_needed` keeps the
-        # loop alive. A natural end, an error, or an exhausted stream ends it.
+        # Re-evaluated per response: a fresh `continue_needed` keeps the loop
+        # alive, but it is only a marker. Drain the ENTIRE response before
+        # opening the next one; the reference stream can carry answer/reasoning
+        # events after the marker and breaking here loses that tail.
         continue_needed = False
         for c_event in _continue_stream(config, scraper, sess, ctx):
             ce_type = c_event.get("type")
+
+            if ce_type == parser_mod.EVENT_INFO and c_event.get("subtype") == "identity_rotation_required":
+                sess.quota_exhausted = True
+                ctx = _recover_identity(config, scraper, sess)
+                continue_needed = True
+                yield c_event
+                continue
+
+            if ce_type in (parser_mod.EVENT_TEXT, parser_mod.EVENT_REASONING):
+                has_content = True
+            elif ce_type == parser_mod.EVENT_TOOL_CALL:
+                sess.record_tool(c_event.get("tool"))
+            elif ce_type == parser_mod.EVENT_CREDIT_USAGE:
+                sess.record_credits(c_event.get("credits"))
+            elif ce_type == parser_mod.EVENT_CONTINUE_NEEDED:
+                continue_needed = True
+                # Do not break: drain the rest of this HTTP response.
+                continue
+
+            if ce_type == parser_mod.EVENT_ERROR:
+                normalized = runtime_errors.parse_stream_error(c_event)
+                if normalized:
+                    c_event["normalized_error"] = normalized
+                    sess.error_encountered = normalized.get("category")
+                yield c_event
+                return
             if ce_type == parser_mod.EVENT_DONE:
                 yield c_event
                 return
-            if ce_type == parser_mod.EVENT_CONTINUE_NEEDED:
-                continue_needed = True
-                break
             yield c_event
 
     # ── P2: terminal guard — never end a run silently ───────────────────────
@@ -440,8 +512,17 @@ def _continue_stream(
 ) -> Generator[Dict[str, Any], None, None]:
     """Resume a truncated run — POST /api/v2/chat/agent-stream/continue."""
     payload = request_mod.build_continue_payload(sess.conversation_id)
+    # The reference calls `_build_headers()` on every continue request. Rebuild
+    # the complete context here rather than reusing the initial `ctx`: this
+    # rotates the three IP headers and carries any token/nc_token obtained by a
+    # recovery login while preserving the same conversation and cookie IDs.
+    fresh_ctx = auth_mod.build_auth_context(
+        config,
+        anon_user_id=sess.anon_user_id,
+        sbox_guid=sess.sbox_guid,
+    )
     response, open_error = _open_stream(
-        config, scraper, config.url("agent_continue"), payload, ctx
+        config, scraper, config.url("agent_continue"), payload, fresh_ctx
     )
     if open_error:
         yield {"type": parser_mod.EVENT_ERROR, "normalized_error": open_error}

@@ -107,6 +107,15 @@ def login(config: NoteGPTConfig, scraper: Any = None) -> Tuple[Optional[str], Op
         ).to_dict()
 
     config.set_session_token(token)
+    # 01.06:544 — the service may set a distinct `nc_token` cookie during
+    # login; preserve it when present and use the access token as the exact
+    # reference fallback when it does not.
+    cookie_jar = getattr(scraper, "cookies", {}) or {}
+    try:
+        nc_token = cookie_jar.get("nc_token")
+    except AttributeError:
+        nc_token = None
+    config.set_nc_token(nc_token or token)
     return token, None
 
 
@@ -134,6 +143,7 @@ def build_auth_context(
             session_token=token,
             anon_user_id=anon_user_id,
             sbox_guid=sbox_guid,
+            nc_token=config.nc_token,
         ),
     }
 

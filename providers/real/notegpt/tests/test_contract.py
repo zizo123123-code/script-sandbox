@@ -278,13 +278,16 @@ def test_quota_exceeded_maps_to_rotation():
 
 def test_all_three_auth_codes_recover_by_rotation():
     """
-    01.06:798 groups all three codes into ONE branch that calls
-    rotate_identity(keep_conversation=True) — it never calls login().
+    01.06:798 groups all three codes into ONE identity-recovery branch that
+    calls rotate_identity(keep_conversation=True). That operation refreshes
+    login credentials when email/password are available, while a session-token
+    only caller can still rotate its anonymous identity.
 
     The category still reflects MEANING (auth vs quota), but the recovery hint
-    must reflect observed BEHAVIOR, with reauthenticate kept as an unverified
-    fallback. This test exists because the first implementation asserted
-    'reauthenticate' for 164003/164002, which the reference code contradicts.
+    must reflect observed BEHAVIOR, with reauthenticate kept as fallback
+    metadata. This test exists because the first implementation asserted
+    'reauthenticate' as the primary recovery for 164003/164002, which the
+    reference code contradicts.
     """
     for code in (164019, 164003, 164002):
         normalized = err.normalize_error(body={"code": code})

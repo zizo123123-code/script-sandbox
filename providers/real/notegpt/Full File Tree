@@ -1,4 +1,4 @@
-🌳 شجرة الهيكل المعماري الشامل (Full File Tree — 55 ملفاً):
+🌳 شجرة الهيكل المعماري الشامل (Full File Tree — 59 ملفاً، بدون ملفات الكاش):
 
 
 providers/real/notegpt/
@@ -65,4 +65,11 @@ providers/real/notegpt/
 │
 └── tests/                           # 🧪 جناح اختبارات العقد المعماري (Contract Tests)
     ├── __init__.py
-    └── test_contract.py             # 48 اختباراً شاملاً للعقد المعماري (48/48 PASS)
+    ├── conftest.py                  # fixtures للعقد
+    ├── mock_transport.py            # نقل SSE offline قابل للبرمجة
+    ├── test_contract.py             # 55 اختباراً للعقد المعماري
+    ├── test_auto_continue.py        # 12 اختباراً لحدّ الاستئناف
+    ├── test_file_infos.py           # 23 اختباراً لأشكال المرفقات
+    ├── test_async_boot.py           # 17 اختباراً للإقلاع + هيدرات login
+    ├── test_reference_compatibility.py # 6 اختبارات لسلوك 01.06/Gist
+    └── test_repo_hygiene.py         # 31 اختباراً للنظافة والأسرار

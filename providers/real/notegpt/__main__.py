@@ -186,11 +186,19 @@ def main() -> None:
         for event in client.stream(prompt_text):
             etype = event.get("type")
             if etype == "sandbox":
-                print(f"\n⚙️  بيئة الـ Sandbox: {event.get('step')}")
+                # Setup progress belongs to the init phase. Once reasoning or
+                # answer text starts, printing later boot/continue notices on
+                # their own lines corrupts the live response display.
+                if phase == "init":
+                    print(f"\n⚙️  بيئة الـ Sandbox: {event.get('step')}")
             elif etype == "info":
-                content = event.get("content") or event.get("step") or ""
-                if content:
-                    print(f"\n{content}")
+                # The reference runner keeps auto-continue/setup chatter out of
+                # the reasoning/final stream. Preserve that phase boundary while
+                # still showing initial status messages to the user.
+                if phase == "init":
+                    content = event.get("content") or event.get("step") or ""
+                    if content:
+                        print(f"\n{content}")
             elif etype == "reasoning":
                 if phase != "thinking":
                     print("\n🧠 [دورة التفكير والساندبوكس - Agent Loop]:\n", end="", flush=True)
@@ -199,8 +207,10 @@ def main() -> None:
             elif etype == "text":
                 if phase == "thinking":
                     print("\n\n🤖 [تسليم الكود والحل النهائي]:\n", end="", flush=True)
-                    phase = "final"
                 print(event.get("content", ""), end="", flush=True)
+                # Text is the terminal output phase even when no reasoning
+                # event preceded it; suppress later setup/info chatter.
+                phase = "final"
             elif etype == "tool_call":
                 print(f"\n🛠️  استدعاء أداة: {event.get('tool')}")
             elif etype == "credit_usage":

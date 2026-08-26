@@ -92,6 +92,7 @@ SSE_EVENTS: List[str] = [
 
 # Cookie names — CORRECTIONS.md §1
 COOKIE_PRIMARY = "user_token"          # NOT "session_token"
+COOKIE_NC = "nc_token"                # reference login companion cookie
 COOKIE_ANON = "anonymous_user_id"
 COOKIE_SBOX = "sbox-guid"
 
@@ -124,11 +125,16 @@ class NoteGPTConfig:
     _email: Optional[str] = field(default=None, repr=False)
     _password: Optional[str] = field(default=None, repr=False)
     _session_token: Optional[str] = field(default=None, repr=False)
+    _nc_token: Optional[str] = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         self._email = os.environ.get(ENV_EMAIL) or None
         self._password = os.environ.get(ENV_PASSWORD) or None
         self._session_token = os.environ.get(ENV_SESSION_TOKEN) or None
+        # The reference service may set a separate `nc_token` cookie after
+        # login. It is runtime session state, not a second user credential, so
+        # it is populated by auth.login() and never read from source files.
+        self._nc_token = None
 
     # --- Credential accessors ------------------------------------------------
     @property
@@ -147,8 +153,15 @@ class NoteGPTConfig:
     def session_token(self) -> Optional[str]:
         return self._session_token
 
+    @property
+    def nc_token(self) -> Optional[str]:
+        return self._nc_token
+
     def set_session_token(self, token: str) -> None:
         self._session_token = token
+
+    def set_nc_token(self, token: Optional[str]) -> None:
+        self._nc_token = token or None
 
     def url(self, key: str) -> str:
         """Absolute URL for a named endpoint."""
@@ -170,6 +183,7 @@ class NoteGPTConfig:
             "has_email": bool(self._email),
             "has_password": bool(self._password),
             "has_session_token": bool(self._session_token),
+            "has_nc_token": bool(self._nc_token),
         }
 
     def __repr__(self) -> str:  # pragma: no cover

@@ -3,24 +3,26 @@
 
 | البند | القيمة |
 |---|---|
-| **الحالة** | `READY` — T-ARENA-001 مكتملة محلياً |
+| **الحالة** | `READY` — T-NGPT-001 مكتملة محلياً |
 | **آخر جلسة** | 2026-08-26 |
-| **آخر Commit** | `c55c5f4` — Arena room + disabled provider template |
+| **آخر Commit** | `c55c5f4` — Arena room + disabled provider template؛ إصلاح T-NGPT-001 قيد الـ commit |
 
 ---
 
 ## ✅ آخر إنجاز
-- إنشاء هوية `AR` وربطها بغرفة `.connect/agents/arena/`.
-- تجهيز مخطط Provider آمن ومعطّل لـ Arena.ai بدون اختراع API أو بيانات اعتماد.
-- اجتياز 11 اختبار عقد stdlib، و`compileall`، و`secret_scan.py` (صفر أسرار)، و`git diff --check`.
+- مراجعة SPEC و`01.06_notegpt_agent_mode.py` والـGist قبل mutation، وتسجيل الانحرافات في `AUDIT_T-NGPT-001.md`.
+- إصلاح ترتيب pre-registration، تصريف استجابة continue كاملة، تجديد سياق الهيدرات لكل طلب، وتجديد auth/cookies عند recovery مع الحفاظ على `conversation_id`.
+- إبقاء public/provider contracts وقفل التفعيل كما هما، وإضافة 5 اختبارات reference-compatibility.
+- اجتياز 144 اختبار NoteGPT، و55 اختبار contract standalone، و11 اختبار Arena template، و`compileall`، و`secret_scan.py` (صفر أسرار)، و`git diff --check`.
 
 ## 🎯 الخطوة التالية
-- تسجيل رقم الـ commit بعد الرفع ومتابعة أي مواصفات رسمية لـ Arena.ai.
-- لا يُفعّل المزود قبل وصول مواصفات API/auth الحقيقية ومراجعة أمنية واختبار حي مصرح.
+- تسجيل commit الإصلاح ورفع branch الجلسة فقط.
+- التحقق الحي يحتاج credentials مصرحاً بها؛ لم يتم تشغيل أي طلب live.
+- لا يُفعّل Arena template أو NoteGPT قبل الموافقات والمواصفات/الاختبارات الحية المطلوبة.
 
 ## 🚧 المشاكل المعلقة
-- لا توجد مواصفات Arena.ai API أو endpoint أو credential contract في هذا الريبو؛ لذلك المزود Template فقط وغير قابل للتوجيه.
-- بيئة التشغيل الحالية لا تحتوي `pytest`/`PyYAML`، لذلك توجد اختبارات stdlib قابلة للتشغيل مباشرة، مع تسجيل نتيجة الفحوصات البديلة.
+- `doctor.py` ما زال يرفض baseline بسبب غياب بطاقة DNA في reference-only script `projects/ngpt/scripts/01.06_notegpt_agent_mode.py`; لم أعدل المرجع حفاظاً على دوره كمصدر سلوك.
+- لا توجد مواصفات Arena.ai API أو endpoint أو credential contract في هذا الريبو؛ لذلك Arena provider يظل Template فقط وغير قابل للتوجيه.
 
 ---
 *القالب: الحالة / آخر إنجاز / الخطوة التالية / المشاكل المعلقة — Protocol-Version: 1.0*
