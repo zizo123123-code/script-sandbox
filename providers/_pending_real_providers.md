@@ -17,8 +17,8 @@ One real provider now exists in the tree (`real/notegpt/`), and it is
 
 31 §19.13 — *"Keep provider disabled until tests pass."*
 
-The 79 offline tests in `real/notegpt/tests/` all pass (55 contract, 12
-auto-continue bound, 12 `fileInfos` wiring). They cover manifest shape,
+The 84 offline tests in `real/notegpt/tests/` all pass (55 contract, 12
+auto-continue bound, 17 attachment-payload wiring). They cover manifest shape,
 capability four-state honesty, error normalization, model catalog, secret
 redaction, Core isolation, the auto-continue ceiling, and session
 pre-registration. They deliberately do not simulate a successful generation
@@ -46,7 +46,8 @@ listed with the evidence that proves the fix, not merely marked "done".
 |---|---|---|---|
 | T-01 | Auto-continue ceiling read a phantom config key `max_continue_attempts`, so the fallback `25` always beat the evidenced `5` (01.06:104); the loop was also entered unconditionally | **fixed** | Ceiling is `limits_mod.should_auto_continue()` only; `sess.continue_calls` has a single increment site. `test_auto_continue.py` (12 tests) |
 | T-02 | The loop bound had no behavioural test — the old test only checked the helper, so a 25-request loop passed | **fixed** | Loop driven end-to-end via MockTransport; asserts request count, counter, and `finish_reason` |
-| T-03 | `create_chat_session()` hardcoded `"fileInfos": []`, so attachments never reached the provider's history record | **fixed** | `sources` threaded through the chain; `test_file_infos.py` (12 tests) asserts the POSTed body. Reverting to `[]` fails 4 tests |
+| T-03 | `create_chat_session()` hardcoded `"fileInfos": []`, so attachments never reached the provider's history record | **fixed** | `sources` threaded through the chain; `test_file_infos.py` asserts the POSTed body. Reverting to `[]` fails 4 tests |
+| T-03b | **Payload confusion, generation side.** `build_stream_payload()` copies its `files` argument verbatim, and the caller passed `request["files"]` raw — so the body shipped **none** of the 5 native stream fields and leaked a foreign `type` key whose `10`/`20` encoding belongs to the *history* shape. Found by the ADDENDUM §1 cross-check; the history side was wired while the stream side was not | **fixed** | Normalized at the single owning call site in `provider_agent.py` via `build_stream_files_payload()`. Observed pre-fix: sent `['name','size','type','url']` vs required `['file_content','file_name','file_size','file_url','mime_type']`. 5 new tests assert the body POSTed to the generation endpoint; reverting fails 4 |
 | T-04 | `file_upload` / `vision_input` declared `true` while `upload_asset()` always returns `UNSUPPORTED_CAPABILITY` | **fixed** | Both are now `partial` with named blockers; manifest and code asserted equal by `test_manifest_capabilities_match_code_exactly` |
 | T-05 | No test transport existed, so nothing could be tested without live credentials | **fixed** | `tests/mock_transport.py`, exposed as fixtures; not imported by the provider package (Core isolation) |
 | T-07 | `except Exception: pass` at `session.py:157` made every pre-registration failure invisible | **fixed** | Now a `logging.warning` with exception type + endpoint + attachment count. Control flow unchanged (still non-fatal). Restoring the silent handler fails 2 tests |
@@ -64,8 +65,15 @@ listed with the evidence that proves the fix, not merely marked "done".
 - **Broken CDN fallback** at 01.06:174 embeds a hardcoded date `2026/08/25`,
   making the fallback URL structurally dead on any other day. The reference
   script is outside the provider package and was deliberately not modified.
+- **`build_stream_payload()` still trusts its caller.** The T-03b fix normalizes
+  attachments at the call site because `runtime/request.py` is outside the
+  agreed whitelist for this round. The builder therefore still copies any
+  `files` argument verbatim, so a *future* caller could reintroduce the same
+  confusion. The durable fix is to normalize inside the builder (or reject a
+  non-native shape); the tests added here would catch a regression on the
+  existing path, but not a brand-new caller. **Deferred, needs scope approval.**
 - **Live verification** of every path above (see the activation list) still
-  requires real credentials; all 79 tests are offline by design.
+  requires real credentials; all 84 tests are offline by design.
 
 ---
 
@@ -81,7 +89,7 @@ listed with the evidence that proves the fix, not merely marked "done".
 | 6 | Implement health check | done — reports `SUSPENDED` while disabled |
 | 7 | Implement error normalization | done — 12 spec categories, app-code precedence over HTTP 200 |
 | 8 | Rate/limit behavior if known | partial — fabricated numbers reported as `unknown`; only `AUTO_CONTINUE_LIMIT=5` is evidenced |
-| 9 | Contract tests per declared capability | **pending live** — offline tests done (79 pass); auto-continue bound + `fileInfos` chain now covered |
+| 9 | Contract tests per declared capability | **pending live** — offline tests done (84 pass); auto-continue bound + both attachment payload shapes now covered |
 | 10 | Security checks for secrets and tenant isolation | **pending review** |
 | 11 | Register provider in Provider Registry | **pending** — no registry module exists in this repo yet |
 | 12 | Register model/provider bindings | done in-provider — 36 models, 7 phantoms excluded |
