@@ -106,9 +106,9 @@ class Config:
     MAX_ATTACHED_SOURCES: int = 5 # الحد الأقصى للمصادر المرفقة (Up to 5 sources at a time)
     
     # بيانات حساب NoteGPT لتسجيل الدخول وسحب التوكن الحي تلقائياً
-    EMAIL: str = "um66jywg@emalupe.com"
-    PASSWORD: str = "Password123#$"
-    SESSION_TOKEN: str = "_5aNBxPZqvZnCIwwseqYyCfMeM_WFXB-JLcZnTpZMPI"
+    EMAIL: str = os.environ.get("NOTEGPT_EMAIL", "")
+    PASSWORD: str = os.environ.get("NOTEGPT_PASSWORD", "")
+    SESSION_TOKEN: str = os.environ.get("NOTEGPT_SESSION_TOKEN", "")
     
     # مسارات ملفات المهام والشات المؤتمتة
     CHAT_SEND_FILE: str = str(pathlib.Path(__file__).resolve().parent / "chat_send.txt")
