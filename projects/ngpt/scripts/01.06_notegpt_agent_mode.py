@@ -107,9 +107,9 @@ class Config:
     
     # بيانات حساب NoteGPT لتسجيل الدخول التلقائي وسحب التوكن الحي عند اللزوم
     AUTH_LOGIN_URL: str = "https://notegpt.io/api/v1/auth/email/login"
-    EMAIL: str = "um66jywg@emalupe.com"
-    PASSWORD: str = "Password123#$"
-    SESSION_TOKEN: str = "5U2cxQ0eCczzpQM-067Mm5Iqo4x2gW9lP-noq4LNn18"
+    EMAIL: str = os.environ.get("NOTEGPT_EMAIL", "")
+    PASSWORD: str = os.environ.get("NOTEGPT_PASSWORD", "")
+    SESSION_TOKEN: str = os.environ.get("NOTEGPT_SESSION_TOKEN", "")
 
     # مسارات الملفات والمجلدات المؤتمتة
     BASE_DIR: pathlib.Path = pathlib.Path(__file__).resolve().parent
