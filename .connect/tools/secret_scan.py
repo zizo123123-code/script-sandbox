@@ -40,6 +40,21 @@ SAFE_VALUES = re.compile(
     re.IGNORECASE,
 )
 
+# قيم اختبارية معلنة عن نفسها — ليست أسراراً حتى لو لم تُطابِق SAFE_VALUES
+# بالكامل. مطلوبة لأن حُرّاس تسريب الأسرار **يجب** أن تحقن قيمة اعتماد وهمية
+# لتتحقق أنها لا تظهر في السجل؛ ولا يجوز إعفاء مجلد `tests/` بالكامل لأن سراً
+# حقيقياً قد يُودَع فيه. المعيار هو دلالة القيمة نفسها، لا موقع الملف.
+#
+# نطاقات `.test` / `.invalid` / `.example` محجوزة بـ RFC 2606 و RFC 6761
+# تحديداً لهذا الغرض، فلا يمكن أن تكون حساباً حقيقياً.
+TEST_VALUE_MARKERS = re.compile(
+    r"canary|probe|dummy|placeholder|fixture|sample|"
+    r"^fake[-_]|[-_]fake|^mock[-_]|[-_]mock|"
+    r"\.(?:test|invalid|example|localhost)\b|"
+    r"^(?:my|the)?[-_]?secret[-_](?:value|text)$",
+    re.IGNORECASE,
+)
+
 # القواعد: (المعرّف، الوصف، regex يلتقط القيمة في group 1)
 RULES = [
     (
@@ -84,11 +99,46 @@ SAFE_LINE_HINTS = ("os.environ", "os.getenv", "getenv(", "environ[",
                    "ENV[", "process.env", "load_dotenv", "argparse",
                    "input(", "getpass")
 
+# الأسرار المحقونة في البيئة — عكس اتجاه SAFE_LINE_HINTS.
+#
+# الجذر: كل الأنماط في SAFE_LINE_HINTS تفترض أن البيئة هي **المصدر**
+#     PASSWORD = os.environ["X"]          ← آمن (قراءة)
+# لكن نفس الأنماط تظهر حين تكون البيئة هي **الهدف**
+#     os.environ["PASSWORD"] = "literal"  ← سرّ مكتوب حرفياً!
+# فكان الفحص يقرأ سراً يُحقَن كأنه سرّ يُتجنَّب. القياس المُثبَت: توكن جلسة
+# حيّ + إيميل + كلمة مرور في providers/real/notegpt/__main__.py مرّوا بصفر
+# تحذيرات لأن السطر يحتوي "os.environ".
+#
+# القاعدة هنا لا تلتقط إلا الاتجاه الخطر: مفتاح بيئة حسّاس على **يسار** `=`
+# وقيمة نصية حرفية على يمينه. القراءة من البيئة لا تطابقها إطلاقاً.
+ENV_INJECTION_RULE = (
+    "SECRET_INJECTED_INTO_ENV",
+    "سرّ مكتوب حرفياً يُحقَن في متغير بيئة",
+    re.compile(
+        r"""environ(?:\[|\.get\()\s*["'][A-Z0-9_]*"""
+        r"""(?:PASSWORD|PASSWD|PWD|TOKEN|SECRET|API_KEY|APIKEY|EMAIL)"""
+        r"""[A-Z0-9_]*["']\s*\]?\s*=\s*["']([^"']{3,})["']""",
+        re.I,
+    ),
+)
+RULES.append(ENV_INJECTION_RULE)
 
-def is_safe(value: str, line: str) -> bool:
+# قواعد لا يجوز إسكاتها بـ SAFE_LINE_HINTS (لأن الـ hint نفسه جزء من النمط)
+DIRECTION_SENSITIVE_RULES = {ENV_INJECTION_RULE[0]}
+
+
+def is_safe(value: str, line: str, rule_id: str = "") -> bool:
     """هل القيمة الملتقطة آمنة (placeholder أو من متغير بيئة)؟"""
     if SAFE_VALUES.match(value.strip()):
         return True
+    # قيمة تُعلن عن نفسها كاختبارية (canary/probe/نطاق محجوز) — تُستثنى في أي
+    # ملف، فالمعيار دلالة القيمة لا موقع الملف.
+    if TEST_VALUE_MARKERS.search(value.strip()):
+        return True
+    # قاعدة الحقن تُطابِق سطراً يحتوي "os.environ" بالضرورة، فإسكاتها بـ
+    # SAFE_LINE_HINTS يُلغيها بالكامل. الـ placeholders وحدها تُستثنى.
+    if rule_id in DIRECTION_SENSITIVE_RULES:
+        return False
     if any(h in line for h in SAFE_LINE_HINTS):
         return True
     # قيمة كلها underscore/dash = placeholder
@@ -122,7 +172,7 @@ def scan_file(path: Path):
         for rule_id, desc, pattern in RULES:
             for m in pattern.finditer(line):
                 value = m.group(1)
-                if is_safe(value, line):
+                if is_safe(value, line, rule_id):
                     continue
                 findings.append({
                     "file": str(path.relative_to(ROOT)),
