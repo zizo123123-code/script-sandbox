@@ -18,6 +18,7 @@ import random
 import uuid
 from typing import Any, Dict, Optional
 
+from ..assets import upload as upload_mod
 from ..config import (
     COOKIE_ANON,
     COOKIE_PRIMARY,
@@ -112,6 +113,30 @@ def build_stream_payload(
     Note the field names: `chat_mode: "agent"` (not `agent_mode: true`) and
     `message` (not `prompt`). The original inventory/notegpt/generation.md
     documented a different, non-existent shape.
+
+    ATTACHMENTS (T-03b root fix)
+    ----------------------------
+    `files` is NORMALIZED here rather than copied verbatim. Previously this
+    builder trusted its caller, so whatever list it was handed went straight
+    onto the wire. A caller passing raw attachment dicts therefore shipped
+    ZERO of the 5 native fields plus a foreign `type` key whose 10/20 encoding
+    belongs to the *history* `fileInfos[]` shape. Reproduced on this builder
+    directly, before this change:
+        keys sent   : ['name', 'size', 'type', 'url']       (0/5 native)
+        keys wanted : ['file_content','file_name','file_size','file_url',
+                       'mime_type']
+
+    T-03b first fixed this at the single call site in `provider_agent.py`,
+    because `runtime/request.py` was outside that round's approved scope. That
+    left the builder still trusting its caller, so any NEW call site could
+    reintroduce the exact same bug. The invariant now belongs to the function
+    that owns the body: this builder cannot emit a malformed `files[]`
+    regardless of who calls it.
+
+    `build_stream_files_payload()` is idempotent (it reads BOTH the caller
+    spelling `url`/`name`/`size` and the native `file_url`/`file_name`/
+    `file_size`), verified once == twice == thrice, so the pre-existing call
+    site that already normalizes stays correct and is not double-converted.
     """
     payload: Dict[str, Any] = {
         "message": prompt,
@@ -125,7 +150,9 @@ def build_stream_payload(
     }
     if files:
         # Native files array — 01.06:759-762
-        payload["files"] = files
+        normalized = upload_mod.build_stream_files_payload(files)
+        if normalized:
+            payload["files"] = normalized
     return payload
 
 
