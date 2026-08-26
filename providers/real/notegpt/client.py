@@ -153,3 +153,8 @@ class NoteGPTClient:
             return {"error": err.normalize_error(http_status=response.status_code, body=body).to_dict()}
 
         return {"result": (body.get("data") or {}).get("list", [])}
+
+
+if __name__ == "__main__":
+    from .__main__ import main
+    main()

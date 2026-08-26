@@ -49,6 +49,8 @@ def _open_stream(
 ):
     """POST a streaming request. Returns (response, normalized_error)."""
     try:
+        if hasattr(scraper, "cookies") and ctx.get("cookies"):
+            scraper.cookies.update(ctx["cookies"])
         response = scraper.post(
             url,
             json=payload,
@@ -122,6 +124,9 @@ def stream_agent_run(
     )
 
     yield {"type": parser_mod.EVENT_SANDBOX, "step": "initializing_sandbox"}
+
+    # 01.06:741 — Pre-register chat session on NoteGPT /api/v2/ai-chat
+    session_mod.create_chat_session(config, scraper, sess, prompt, ctx)
 
     response, open_error = _open_stream(config, scraper, config.url("chat_stream"), payload, ctx)
     if open_error:

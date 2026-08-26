@@ -117,3 +117,42 @@ def resume_session(
     session = ConversationSession(model=model, is_auto_model=is_auto_model)
     session.conversation_id = conversation_id
     return session
+
+
+def create_chat_session(
+    config: Any,
+    scraper: Any,
+    sess: ConversationSession,
+    prompt: str,
+    ctx: Dict[str, Any],
+) -> None:
+    """Pre-register chat session on NoteGPT /api/v2/ai-chat (01.06:596-629)"""
+    try:
+        now_ms = int(time.time() * 1000)
+        payload = {
+            "source": "agent",
+            "content": {
+                "title": prompt[:40],
+                "updateTime": now_ms,
+                "chat_list": [{
+                    "label": prompt,
+                    "question": prompt,
+                    "answer": [""],
+                    "reasoning": [{"startedAt": None, "endedAt": None, "reasoning": "", "thinkingSeconds": 0}],
+                    "blocks": [],
+                    "isStreaming": True,
+                    "isInterrupted": False,
+                    "generatedFiles": [],
+                    "conversation_id": sess.conversation_id,
+                    "created_at": now_ms,
+                    "fileInfo": None,
+                    "fileInfos": [],
+                    "modelValue": sess.model or config.model,
+                    "isAutoModel": sess.is_auto_model,
+                    "isStopped": False,
+                }],
+            },
+        }
+        scraper.post(config.url("chat_record"), json=payload, headers=ctx["headers"], cookies=ctx["cookies"], timeout=5)
+    except Exception:
+        pass
