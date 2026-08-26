@@ -21,6 +21,7 @@
 | المجلد | الغرض |
 |---|---|
 | [`.connect/`](./.connect/) | 🧠 عقل المنظومة: الدستور + تعريف الأيجنتات + الغرف + الأدوات + لوحة الفيرومونات 🐜 |
+| [`providers/`](./providers/) | 🔌 عقود المزودين، المزود الحقيقي المعطّل، وTemplate Arena.ai غير القابل للتوجيه |
 | [`connect-plan-claude-genspark/`](./connect-plan-claude-genspark/) | 📋 الخطة المعتمدة + سجل المهام + التقدم + بروتوكول SWARM-DNA 🧬 |
 | [`projects/`](./projects/) | 📦 المشاريع بالهيكل القياسي (`scripts/` + `har/` + `outputs/`) |
 | [`NOT_EGPT/`](./NOT_EGPT/) | 🤖 NoteGPT Agent Engine v01.05 (المشروع الأصلي — مصيره في DQ-001) |
@@ -36,6 +37,9 @@ python .connect/tools/pheromone.py claim --agent AG --target T-007 --ttl 4
 
 # إنشاء أيجنت جديد (غرفة + تحديث AGENTS.yaml)
 python .connect/tools/new_agent.py --code GM --name Gemini --role "مراجعة"
+
+# غرفة Arena.ai الحالية (الكود AR)
+# .connect/agents/arena/
 
 # إنشاء مشروع جديد بالهيكل القياسي
 python .connect/tools/new_project.py --slug myapp --name "My App"

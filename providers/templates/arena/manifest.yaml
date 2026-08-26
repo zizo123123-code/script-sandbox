@@ -1,0 +1,74 @@
+# Arena.ai Provider Template
+#
+# This manifest describes a future provider shape only. It deliberately does
+# not contain an endpoint, model name, credential, or claim of live access.
+# Keep it disabled until the real provider contract is documented and verified.
+
+id: arena
+name: Arena.ai Agent Provider
+version: 0.1.0
+status: template_disabled
+is_template: true
+is_functional: false
+real_provider_required: true
+
+auth:
+  types: []
+  supports_refresh: false
+  credential_policy: reference_only
+
+account_pool:
+  supported: false
+  required: false
+  lease_required: false
+  fencing_required: false
+  reason: not_applicable_until_provider_contract_exists
+
+capabilities:
+  chat: false
+  text_generation: false
+  reasoning: false
+  code: false
+  vision_input: false
+  image_generation: false
+  audio_input: false
+  audio_output: false
+  embeddings: false
+  rerank: false
+  moderation: false
+  provider_agent: true
+  tool_use: true
+  files: true
+
+operations:
+  run_provider_agent: true
+
+authoritative_details:
+  endpoint: unknown
+  authentication: unknown
+  model_catalog: unknown
+  event_schema: unknown
+  rate_limits: unknown
+
+models:
+  discovery: not_implemented
+  static_models: []
+
+agent_module:
+  supported: true
+  type: provider_agent_template
+  state_model: unknown
+  provider_managed_state: unknown
+  supports_provider_tools: unknown
+  supports_platform_tools: false
+
+security:
+  provider_side_tools_allowed_by_default: false
+  requires_capability_firewall: true
+  requires_evaluation: true
+  requires_audit: true
+
+notes:
+  - This is a scaffold template only; it is not a working Arena.ai integration.
+  - No provider-specific endpoint or credential format may be guessed.
+  - A future implementation must remain disabled until contract tests and security review pass.

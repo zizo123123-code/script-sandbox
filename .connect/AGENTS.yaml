@@ -47,6 +47,15 @@ agents:
     previous_codes: []
     joined: "2026-08-25"
 
+  # Arena.ai Agent Mode — room name follows the user's existing lowercase path.
+  AR:
+    name: Arena.ai
+    status: active
+    role: "مراجع ومنفذ آمن — عقود المزودين، التحقق، ومنع التكاملات المختلقة"
+    room: ".connect/agents/arena/"
+    previous_codes: []
+    joined: "2026-08-26"
+
   # ---------- أكواد محجوزة (غير نشطة — لا تنشئ غرفها الآن) ----------
   GM:
     name: Gemini
