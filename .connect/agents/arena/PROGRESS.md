@@ -5,7 +5,7 @@
 |---|---|
 | **الحالة** | `READY` — T-NGPT-001 مكتملة محلياً |
 | **آخر جلسة** | 2026-08-26 |
-| **آخر Commit** | `c55c5f4` — Arena room + disabled provider template؛ إصلاح T-NGPT-001 قيد الـ commit |
+| **آخر Commit** | `22b537b` — إصلاح T-NGPT-001 (reference flow + SPEC boundaries) |
 
 ---
 
