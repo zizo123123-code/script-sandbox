@@ -17,9 +17,9 @@ One real provider now exists in the tree (`real/notegpt/`), and it is
 
 31 §19.13 — *"Keep provider disabled until tests pass."*
 
-The 101 offline tests in `real/notegpt/tests/` all pass (55 contract, 12
-auto-continue bound, 17 attachment-payload wiring, 17 async-boot + login-header).
-They cover manifest shape,
+The 133 offline tests in `real/notegpt/tests/` all pass (55 contract, 12
+auto-continue bound, 23 attachment-payload wiring, 17 async-boot + login-header,
+26 repo hygiene). They cover manifest shape,
 capability four-state honesty, error normalization, model catalog, secret
 redaction, Core isolation, the auto-continue ceiling, and session
 pre-registration. They deliberately do not simulate a successful generation
@@ -93,18 +93,8 @@ distinctly from every other row in the table above.
   (ROUND2 §3). This single blocker is why `file_upload` and `vision_input` are
   `partial` rather than `true`. **Requires upstream reverse-engineering or a
   vendor answer — not a code change.**
-- **Broken CDN fallback** at 01.06:174 embeds a hardcoded date `2026/08/25`,
-  making the fallback URL structurally dead on any other day. The reference
-  script is outside the provider package and was deliberately not modified.
-- **`build_stream_payload()` still trusts its caller.** The T-03b fix normalizes
-  attachments at the call site because `runtime/request.py` is outside the
-  agreed whitelist for this round. The builder therefore still copies any
-  `files` argument verbatim, so a *future* caller could reintroduce the same
-  confusion. The durable fix is to normalize inside the builder (or reject a
-  non-native shape); the tests added here would catch a regression on the
-  existing path, but not a brand-new caller. **Deferred, needs scope approval.**
 - **Live verification** of every path above (see the activation list) still
-  requires real credentials; all 101 tests are offline by design.
+  requires real credentials; all 133 tests are offline by design.
 - **T-09/T-10 rest on second-hand field evidence.** Both were reproduced and
   fixed against the *reported* wire behaviour, not against a live service this
   agent observed. The reported boot window (5-7s) and frame names are taken on
@@ -113,6 +103,40 @@ distinctly from every other row in the table above.
   input — do not treat the numbers as evidenced.**
 - **The reported CLI timing (6.8s) was not reproduced here** and is not claimed:
   it depends on live credentials this agent does not have.
+
+---
+
+## Scope-barrier round (P0 / P1 / P2)
+
+The three items below were previously listed as "still open" **only because
+they fell outside the approved edit scope**, not because they lacked a known
+fix. With the audit barrier lifted they were fixed at the root. Each was
+reproduced first, then mutation-verified.
+
+| # | Item | Root cause (proved before fixing) | Fix | Mutation |
+|---|---|---|---|---|
+| P0 | `build_stream_payload()` trusted its caller | Called directly with raw caller dicts it emitted `['name','size','type','url']` — **0/5** native fields, plus a foreign `type` key whose 10/20 encoding belongs to the *history* shape | Normalize **inside the builder**, so the invariant belongs to the function that owns the body and no new call site can reintroduce it | 4 tests fail when reverted |
+| P1 | `.gitignore` had no secret patterns | `active_token.txt`, `.env`, `token.txt`, `secrets.json`, `credentials.json` all returned "WOULD BE COMMITTED"; only `env/`/`venv/` matched a grep for "env", and those are virtualenv *directories* | Added anchored secret patterns + `!.env.example` negations; verified no tracked file became ignored | 15 tests fail when reverted |
+| P2 | Fabricated upload URL at 01.06:174 | Returned a hardcoded-date CDN URL on failure. Live `curl` at fix time: **HTTP 404**. Worse, it is a truthy `str`, so all four `if s.uploaded_url:` consumers read a **failed** upload as a **success** | Return `Optional[str] = None` honestly, and log the failure instead of `except: pass` | 4 tests fail when reverted |
+
+Notes on the reasoning, since each fix rejected an easier-looking option:
+
+- **P0** — the earlier call-site normalization is kept. It is now redundant but
+  harmless, because `build_stream_files_payload()` is idempotent (verified
+  `once == twice == thrice`), so the already-normalizing path is not
+  double-converted.
+- **P1** — `*_token.txt` alone does **not** match a bare `token.txt` (the glob
+  needs a character before the underscore). Caught by the parametrized guard,
+  which reported `token.txt` as committable until `*token.txt` was added.
+- **P2** — merely updating the hardcoded date would have fixed only defect 1 of
+  3, leaving the dead URL and the silent false-success intact. The line-978
+  regex that matches `cdn.ng-resource.com` is **legitimate and untouched**: it
+  *extracts* real CDN links out of provider replies rather than manufacturing
+  one.
+
+Guards for P1 and P2 live in `tests/test_repo_hygiene.py`. Both fixes are
+configuration / reference-script edits that nothing imports, so without those
+tests either could be undone with the whole suite still green.
 
 ---
 
