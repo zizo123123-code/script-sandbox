@@ -71,6 +71,25 @@ def line_continue_needed(reason: str = "length") -> bytes:
     return sse({"type": "done", "reason": reason})
 
 
+def line_boot(step: str = "resume_sandbox", etype: str = "prepare_env") -> bytes:
+    """
+    An asynchronous-sandbox warm-up frame (T-09).
+
+    Real wire shapes observed during the Daytona boot window:
+        {"type": "start"}
+        {"type": "prepare_env", "step": "resume_sandbox"}
+        {"type": "prepare_env", "step": "resume_sandbox_done"}
+        {"type": "prepare_env_done"}
+
+    Emitted as a genuine wire line so `runtime/parser.py` performs the real
+    normalization — before T-09 these lines produced ZERO events.
+    """
+    obj: Dict[str, Any] = {"type": etype}
+    if step:
+        obj["step"] = step
+    return sse(obj)
+
+
 def line_tool_call(name: str = "python3") -> bytes:
     return sse({"type": "tool_call", "name": name, "args": {}})
 
