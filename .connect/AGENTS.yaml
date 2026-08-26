@@ -16,9 +16,9 @@ naming_rules:
 
 agents:
   ARN:
-    name: Arena
+    name: Arena Agent
     status: active
-    role: "أيجنت تنفيذ ومراجعة — Arena.ai Agent Mode"
+    role: "أيجنت تنفيذ ومراجعة وهندسة المزودات — Arena AI Agent Mode"
     room: ".connect/agents/ARN/"
     previous_codes: []
     joined: "2026-08-26"
