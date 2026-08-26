@@ -9,3 +9,70 @@ venv/
 *.tmp
 .DS_Store
 Thumbs.db
+.pytest_cache/
+
+# ==============================================================================
+# SECRETS — 30 §2 / §18.3 · 31 §19.5
+# ==============================================================================
+# Until now this file had NO secret pattern at all. Only `env/` and `venv/`
+# matched a grep for "env", and those are virtualenv DIRECTORIES, not secret
+# files. Verified before this change — every one of these would have been
+# committed by a single `git add -A`:
+#     active_token.txt  .env  .env.local  token.txt  secrets.json
+#     credentials.json      -> all "WOULD BE COMMITTED"
+#
+# That gap is why the reference implementation's `active_token.txt` (a live
+# session token stored in plaintext beside the code) was rejected rather than
+# adopted: the repo had no net beneath it.
+#
+# .connect/tools/secret_scan.py scans file CONTENT and its own remediation
+# advice is "add .env to .gitignore" — which had never been done. Content
+# scanning and ignore rules are complementary, not substitutes: the scanner
+# catches a secret pasted into tracked source, these rules stop a secret FILE
+# from being tracked at all.
+#
+# NOTE: the patterns below are deliberately anchored to real secret-bearing
+# filenames. `secret_scan.py` itself is tracked tooling and must NOT be
+# ignored — verified with `git check-ignore` after this change.
+
+# Environment / credential files
+.env
+.env.*
+!.env.example
+!.env.template
+!.env.sample
+
+# Token & session material (incl. the reference script's active_token.txt)
+# NOTE: `*_token.txt` alone does NOT match a bare `token.txt` — the glob needs
+# at least one character before the underscore. Verified: `token.txt` came back
+# "COMMITTABLE" until `*token.txt` was added. Both spellings are kept so the
+# intent stays readable.
+active_token.txt
+*token.txt
+*_token.txt
+*.token
+token.json
+tokens.json
+
+# Credential stores
+credentials.json
+*credentials.json
+secrets.json
+*secrets.json
+*.secret
+
+# Keys & certificates
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+
+# Provider account pools / session dumps
+accounts_*.json
+session_dump*.json
+cookies.json
+cookie_jar.json
