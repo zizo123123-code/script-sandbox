@@ -22,9 +22,19 @@ if hasattr(sys.stdout, "reconfigure"):
     except Exception:
         pass
 
-from .config import NoteGPTConfig, DEFAULT_MODEL
-from .client import NoteGPTClient
-from .discovery import models as models_mod
+if __package__ in (None, ""):
+    # تشغيل مباشر كسكريبت عبر زرار Run في الـ IDE
+    _pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    if _pkg_root not in sys.path:
+        sys.path.insert(0, _pkg_root)
+    from providers.real.notegpt.config import NoteGPTConfig, DEFAULT_MODEL
+    from providers.real.notegpt.client import NoteGPTClient
+    from providers.real.notegpt.discovery import models as models_mod
+else:
+    # تشغيل كـ Module عبر python -m
+    from .config import NoteGPTConfig, DEFAULT_MODEL
+    from .client import NoteGPTClient
+    from .discovery import models as models_mod
 
 
 def main() -> None:
