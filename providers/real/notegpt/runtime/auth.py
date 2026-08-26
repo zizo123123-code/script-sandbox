@@ -48,13 +48,27 @@ def login(config: NoteGPTConfig, scraper: Any = None) -> Tuple[Optional[str], Op
 
     scraper = scraper or request_mod.create_scraper()
 
-    headers = {
-        "Accept": "*/*",
-        "Content-Type": "application/json; charset=UTF-8",
-        "origin": config.origin,
-        "referer": f"{config.origin}/login",
-        "user-agent": config.user_agent,
-    }
+    # T-10 — the login endpoint was the ONLY request in the package sent
+    # WITHOUT the IP-rotation headers, so it alone attracted app code 164010
+    # (rate limit). Verified before this change:
+    #     build_headers() : accept, accept-encoding, accept-language,
+    #                       client-ip, content-type, origin, referer,
+    #                       user-agent, x-forwarded-for, x-real-ip
+    #     login()         : accept, content-type, origin, referer, user-agent
+    #     missing         : client-ip, x-forwarded-for, x-real-ip (+2 accept-*)
+    #
+    # Reuse `build_headers()` rather than re-deriving the trio locally: there is
+    # then a single definition of the rotation header set, so the two paths
+    # cannot drift apart again. Login-specific values are layered on top:
+    # `referer` points at /login, and the charset-qualified Content-Type of the
+    # auth endpoint is preserved exactly as it was.
+    # Keys must match `build_headers()`' casing exactly. Adding "Accept" next to
+    # its existing "accept" would send BOTH variants (requests does not fold
+    # case in a plain dict) — caught by the duplicate-key test below.
+    headers = request_mod.build_headers(config)
+    headers.pop("Authorization", None)   # never send a stale token to /login
+    headers["content-type"] = "application/json; charset=UTF-8"
+    headers["referer"] = f"{config.origin}/login"
     payload = {"email": config.email, "password": config.password}
 
     try:
