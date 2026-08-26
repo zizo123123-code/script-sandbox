@@ -1,1 +1,3 @@
-{}
+{
+  "providers/real/notegpt/tests/test_contract.py::test_no_hardcoded_credentials_in_package": true
+}
