@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import ast
 import pathlib
+import re
 import subprocess
 
 import pytest
@@ -387,4 +388,73 @@ def test_no_tracked_files_are_gitignored():
     assert not offenders, (
         "these files are tracked despite matching .gitignore — untrack with "
         f"`git rm -r --cached <path>`: {offenders}"
+    )
+
+
+def test_archive_scripts_read_credentials_from_env():
+    """
+    P3 — the 29 secrets ROUND2 §0 found in projects/ngpt/ were REWRITTEN to
+    `os.environ.get("NOTEGPT_*", "")` rather than deleted, to keep the archive
+    usable as a reference. Nothing imports those archive scripts, so a later
+    edit (or a copy-paste from the still-public gist) could reintroduce a
+    literal secret and the whole suite would stay green. This asserts the
+    rewritten state directly.
+
+    Why the empty-string default matters, and why it is asserted here:
+    the archive guards login with `if not Config.EMAIL or not Config.PASSWORD`.
+    A cosmetic placeholder default such as "YOUR_EMAIL_HERE" is truthy, so that
+    guard would pass and the script would attempt a login with a fake value —
+    the rewrite would look right and behave wrong. Only "" preserves the
+    original control flow.
+
+    Matching mirrors test_no_hardcoded_credentials_in_package: assignment
+    TARGETS via AST, never a substring scan, so `EMAIL`, `self.EMAIL` and
+    `os.environ["..."] = ...` all reduce to the same shape.
+    """
+    archive_root = REPO_ROOT / "projects" / "ngpt"
+    if not archive_root.is_dir():
+        pytest.skip("projects/ngpt/ not present")
+
+    sensitive = re.compile(r"PASSWORD|PASSWD|PWD|TOKEN|SECRET|API_?KEY|EMAIL", re.I)
+
+    def target_names(node):
+        targets = [node.target] if isinstance(node, ast.AnnAssign) else node.targets
+        for tgt in targets:
+            if isinstance(tgt, ast.Name):
+                yield tgt.id
+            elif isinstance(tgt, ast.Attribute):
+                yield tgt.attr
+            elif isinstance(tgt, ast.Subscript):
+                key = tgt.slice
+                if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                    yield key.value
+
+    offenders = []
+    for path in sorted(archive_root.rglob("*.py")):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+                continue
+            value = getattr(node, "value", None)
+            if not isinstance(value, ast.Constant) or not isinstance(value.value, str):
+                continue
+            # "" is the intended post-rewrite state, not a secret.
+            if value.value == "":
+                continue
+            # An env-var NAME is not a credential VALUE (same structural
+            # exemption proven narrow in test_no_hardcoded_credentials_in_package).
+            if re.fullmatch(r"[A-Z][A-Z0-9_]*", value.value):
+                continue
+            for name in target_names(node):
+                if sensitive.search(name):
+                    rel = path.relative_to(REPO_ROOT)
+                    offenders.append(f"{rel}:{node.lineno} -> {name}")
+
+    assert not offenders, (
+        "literal credentials reintroduced into the reference archive — rewrite "
+        "them with `python .connect/tools/rewrite_secrets.py --apply`: "
+        f"{offenders}"
     )
