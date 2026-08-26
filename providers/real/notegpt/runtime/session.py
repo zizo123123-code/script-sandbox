@@ -49,6 +49,11 @@ class ConversationSession:
     quota_exhausted: bool = False
     ip_rotated: bool = False
     recovery_used: bool = False
+    # P0 — set when credentials were present but login did not succeed, so the
+    # run silently degraded to anonymous guest identity. A log line alone is not
+    # enough: callers reading telemetry must be able to tell an authenticated
+    # run from a guest-tier one, because the quota ceilings differ.
+    auth_degraded: bool = False
     tools_invoked: List[str] = field(default_factory=list)
     error_encountered: Optional[str] = None
 
@@ -99,6 +104,7 @@ class ConversationSession:
             "quota_exhausted": self.quota_exhausted,
             "ip_rotated": self.ip_rotated,
             "recovery_used": self.recovery_used,
+            "auth_degraded": self.auth_degraded,
             "tools_invoked": list(self.tools_invoked),
             "error_encountered": self.error_encountered,
             "age_seconds": round(time.time() - self.created_at, 2),
