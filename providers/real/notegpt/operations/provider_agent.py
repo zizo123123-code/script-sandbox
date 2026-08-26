@@ -28,6 +28,7 @@ lesson #137. Consequently get/cancel-run are unsupported (see provider.py).
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any, Dict, Generator, List, Optional
 
@@ -40,6 +41,8 @@ from ..runtime import errors as runtime_errors
 from ..runtime import parser as parser_mod
 from ..runtime import request as request_mod
 from ..runtime import session as session_mod
+
+_LOG = logging.getLogger(__name__)
 
 # Pause between auto-continue requests — mirrors the reference script's 1s wait
 # (01.06:890-908). Named so tests can patch it instead of sleeping for real.
@@ -133,14 +136,40 @@ def stream_agent_run(
     scraper = request.get("scraper") or request_mod.create_scraper()
 
     # Authenticate if credentials exist (01.06:495-521)
+    #
+    # P0 — the guest-mode FALLBACK is deliberate (01.06:519): a rate-limited or
+    # rejected login must not abort a run that can still proceed anonymously.
+    # What was wrong is that the failure left NO trace at all. Measured before
+    # this change, these three cases were byte-identical to the caller:
+    #     login returns 164010  -> events ['sandbox','text','done'], 0 log records
+    #     login raises          -> events ['sandbox','text','done'], 0 log records
+    #     login succeeds        -> events ['sandbox','text','done'], 0 log records
+    # So an expired password was indistinguishable from a healthy authenticated
+    # run, and the resulting guest-tier quota errors pointed nowhere near the
+    # real cause. This is the same defect class T-07 fixed in session.py; that
+    # fix never reached this call site.
+    #
+    # Control flow is UNCHANGED (still non-fatal, still degrades to guest).
+    # Logged: the normalized category / provider_code / exception TYPE only —
+    # never the email, password, token, or response body.
     if not config.session_token and config.email and config.password:
         try:
             _, login_error = auth_mod.login(config, scraper=scraper)
             if login_error:
-                # If login is rate-limited (164010) or fails, continue with anonymous guest identity (01.06:519)
-                pass
-        except Exception:
-            pass
+                sess.auth_degraded = True
+                _LOG.warning(
+                    "login failed (category=%s, provider_code=%s) — continuing "
+                    "as anonymous guest; quota limits will be guest-tier",
+                    login_error.get("category"),
+                    login_error.get("provider_code"),
+                )
+        except Exception as exc:
+            sess.auth_degraded = True
+            _LOG.warning(
+                "login raised %s — continuing as anonymous guest; quota limits "
+                "will be guest-tier",
+                type(exc).__name__,
+            )
 
     ctx = auth_mod.build_auth_context(
         config,
@@ -366,6 +395,41 @@ def stream_agent_run(
                 continue_needed = True
                 break
             yield c_event
+
+    # ── P2: terminal guard — never end a run silently ───────────────────────
+    # Every path above that finishes the answer `return`s with a DONE or an
+    # ERROR event. Reaching this line therefore means the generator is about to
+    # end having produced NO content and NO terminal event.
+    #
+    # Measured before this guard, three distinct paths did exactly that:
+    #   1. generation stream empty, no boot frame  -> ['sandbox']
+    #   2. boot frame then a silent continue       -> ['sandbox','sandbox']
+    #   3. boot frame then only non-content frames -> ['sandbox','sandbox','tool_call']
+    #
+    # In all three `run_provider_agent()` returned NO "error" key, text="" and
+    # finish_reason=None — i.e. a successful empty answer. That is the same
+    # failure signature session 11 recorded as "seen as an empty reply", which
+    # T-09 only closed for the boot-timeout case.
+    #
+    # A single terminal guard is used rather than an error at each break site:
+    # the invariant belongs to the FUNCTION ("never yield nothing"), so placing
+    # it here means any future early exit is covered automatically instead of
+    # having to remember to add another error branch.
+    #
+    # Guarded on `has_content` alone: if content was already yielded, a missing
+    # DONE is a truncation the caller can still use, not an empty run.
+    if not has_content:
+        yield {
+            "type": parser_mod.EVENT_ERROR,
+            "normalized_error": err.ProviderError(
+                category=err.PROVIDER_UNAVAILABLE,
+                retryable=True,
+                provider_code="empty_stream",
+                safe_message=(
+                    "Provider stream ended without producing any content."
+                ),
+            ).to_dict(),
+        }
 
 
 def _continue_stream(
