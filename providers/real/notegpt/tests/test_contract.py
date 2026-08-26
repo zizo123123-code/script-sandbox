@@ -23,7 +23,9 @@ Run:  python3 -m pytest providers/real/notegpt/tests/ -v
 
 from __future__ import annotations
 
+import ast
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -486,16 +488,64 @@ def test_no_hardcoded_credentials_in_package():
     """
     ROUND2 §0 found 29 secrets across 10 files in projects/ngpt/.
     This test guards THIS package against repeating that.
+
+    P1 — this guard USED TO look only for the class-attribute spelling
+    (`PASSWORD: str = "..."`). A live session token, email and password sat in
+    `__main__.py` written as `os.environ["NOTEGPT_PASSWORD"] = "..."` and the
+    guard passed, because that form contains none of the three markers. A
+    substring list can only ever catch the spellings someone thought of, so the
+    check now parses the file and inspects assignment TARGETS — every way of
+    writing an assignment reduces to the same AST.
     """
     package_root = Path(__file__).resolve().parents[1]
+
+    sensitive = re.compile(r"PASSWORD|PASSWD|PWD|TOKEN|SECRET|API_?KEY|EMAIL", re.I)
+    # RFC 2606 / RFC 6761 reserved domains + self-declaring test values.
+    test_value = re.compile(
+        r"canary|probe|dummy|placeholder|fixture|fake|mock|example|"
+        r"\.(?:test|invalid|example|localhost)\b",
+        re.I,
+    )
+
+    def target_names(node):
+        """Every name/string a value is being assigned INTO."""
+        for tgt in getattr(node, "targets", []):
+            if isinstance(tgt, ast.Name):
+                yield tgt.id
+            elif isinstance(tgt, ast.Attribute):
+                yield tgt.attr
+            elif isinstance(tgt, ast.Subscript):
+                # os.environ["NOTEGPT_PASSWORD"] = "..."  <-- the missed form
+                key = tgt.slice
+                if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                    yield key.value
+
     offenders = []
     for path in package_root.rglob("*.py"):
         if "tests" in path.parts:
             continue
-        text = path.read_text(encoding="utf-8")
-        for marker in ('PASSWORD: str = "', 'SESSION_TOKEN: str = "', 'EMAIL: str = "'):
-            if marker in text:
-                offenders.append(f"{path.name}: {marker}")
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+                continue
+            value = getattr(node, "value", None)
+            # Only literal strings are secrets; `X = os.environ[...]` is a Call
+            # or Subscript node and is correctly ignored.
+            if not isinstance(value, ast.Constant) or not isinstance(value.value, str):
+                continue
+            if len(value.value) < 3 or test_value.search(value.value):
+                continue
+            names = list(target_names(node)) if isinstance(node, ast.Assign) else []
+            if isinstance(node, ast.AnnAssign):
+                tgt = node.target
+                if isinstance(tgt, ast.Name):
+                    names = [tgt.id]
+                elif isinstance(tgt, ast.Attribute):
+                    names = [tgt.attr]
+            for name in names:
+                if sensitive.search(name):
+                    offenders.append(f"{path.name}:{node.lineno} -> {name}")
+
     assert not offenders, f"hardcoded credentials found: {offenders}"
 
 
