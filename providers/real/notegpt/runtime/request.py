@@ -84,17 +84,17 @@ def build_cookies(
 
 def create_scraper() -> Any:
     """
-    cloudscraper session — notes.md §1 marks this MANDATORY for TLS/JA3
-    fingerprints matching real Chrome. 01.06:466-468 uses the android/chrome
-    non-desktop profile.
-
-    Raises ImportError rather than silently degrading to plain `requests`,
-    which would be blocked.
+    curl_cffi / cloudscraper session for real Chrome TLS/JA3 fingerprints.
+    Uses curl_cffi with chrome124 impersonation for stable HTTP/2 streaming.
     """
-    import cloudscraper  # imported lazily; only needed for live calls
-    return cloudscraper.create_scraper(
-        browser={"browser": "chrome", "platform": "android", "desktop": False}
-    )
+    try:
+        from curl_cffi import requests as creq
+        return creq.Session(impersonate="chrome124")
+    except ImportError:
+        import cloudscraper
+        return cloudscraper.create_scraper(
+            browser={"browser": "chrome", "platform": "android", "desktop": False}
+        )
 
 
 def build_stream_payload(

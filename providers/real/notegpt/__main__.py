@@ -14,6 +14,8 @@ import sys
 import os
 import argparse
 import time
+import uuid
+from pathlib import Path
 
 if hasattr(sys.stdout, "reconfigure"):
     try:
@@ -30,11 +32,13 @@ if __package__ in (None, ""):
     from providers.real.notegpt.config import NoteGPTConfig, DEFAULT_MODEL
     from providers.real.notegpt.client import NoteGPTClient
     from providers.real.notegpt.discovery import models as models_mod
+    from providers.real.notegpt.runtime import request as req_mod
 else:
     # تشغيل كـ Module عبر python -m
     from .config import NoteGPTConfig, DEFAULT_MODEL
     from .client import NoteGPTClient
     from .discovery import models as models_mod
+    from .runtime import request as req_mod
 
 
 def main() -> None:
@@ -66,6 +70,11 @@ def main() -> None:
         "--session", "-s",
         default=None,
         help="معرف جلسة سابقة لاستئناف نفس الساندبوكس",
+    )
+    parser.add_argument(
+        "--new", "-n",
+        action="store_true",
+        help="بدء محادثة وساندبوكس جديد وتوليد معرف جلسة جديد",
     )
 
     args = parser.parse_args()
@@ -114,37 +123,80 @@ def main() -> None:
     print("=" * 75)
 
     # 3. تأمين بيانات الحساب من البيئة أو الافتراضية
+    if not os.environ.get("NOTEGPT_SESSION_TOKEN"):
+        os.environ["NOTEGPT_SESSION_TOKEN"] = "sIoRuVKm5Wn5QavHKTdcsPhzhRqTq2vdR2txIJyOx4o"
     if not os.environ.get("NOTEGPT_EMAIL"):
-        os.environ["NOTEGPT_EMAIL"] = "um66jywg@emalupe.com"
+        os.environ["NOTEGPT_EMAIL"] = "jiqzqgda@emalupe.com"
         os.environ["NOTEGPT_PASSWORD"] = "Password123#$"
 
-    config = NoteGPTConfig()
-    client = NoteGPTClient(config=config, model=args.model, conversation_id=args.session)
+    # 3. استرجاع أو إنشاء جلسة المحادثة (Active Session)
+    session_id = args.session
+    active_sess_file = Path(__file__).resolve().parent / "active_session.txt"
+    if args.new:
+        session_id = str(uuid.uuid4())
+        try:
+            active_sess_file.write_text(session_id, encoding="utf-8")
+        except Exception:
+            pass
+    elif not session_id and active_sess_file.exists():
+        try:
+            session_id = active_sess_file.read_text(encoding="utf-8").strip()
+        except Exception:
+            pass
+    if not session_id:
+        ref_sess = Path("projects/ngpt/active_session.txt")
+        if ref_sess.exists():
+            try:
+                session_id = ref_sess.read_text(encoding="utf-8").strip()
+            except Exception:
+                pass
+    if not session_id:
+        session_id = str(uuid.uuid4())
+        try:
+            active_sess_file.write_text(session_id, encoding="utf-8")
+        except Exception:
+            pass
 
+    config = NoteGPTConfig()
+    client = NoteGPTClient(config=config, model=args.model, conversation_id=session_id)
+
+    fake_ip = req_mod.generate_fake_ip()
     print(f"💬 السؤال: '{prompt_text}'")
     print(f"🤖 النموذج: {args.model}")
+    print(f"👤 الحساب النشط: {config.email} (Authenticated Session)")
+    print(f"🌸 وضع التشغيل: وضع الأيجنتس السحابي (Cloud Linux Sandbox 🤖 - chat_mode: agent)")
+    print(f"🛡️ عنوان الـ IP : {fake_ip} (يتغير تلقائياً مع كل سؤال 🔄)")
     print(f"🏷️ الجلسة: {client.session.conversation_id}")
     print("📡 البث المباشر للرد (Live Streaming):")
     print("-" * 50)
 
     start_t = time.time()
+    phase = "init"
     try:
         for event in client.stream(prompt_text):
             etype = event.get("type")
-            if etype == "text":
-                print(event.get("content", ""), end="", flush=True)
-            elif etype == "reasoning":
-                print(event.get("content", ""), end="", flush=True)
-            elif etype == "sandbox":
-                print(f"\n[📦 Daytona Sandbox: {event.get('step')}]")
-            elif etype == "tool_call":
-                print(f"\n[🛠️ استدعاء أداة: {event.get('tool')}]")
+            if etype == "sandbox":
+                print(f"\n⚙️  بيئة الـ Sandbox: {event.get('step')}")
             elif etype == "info":
-                print(f"\n[ℹ️ {event.get('subtype', 'info')}: {event.get('content', '')}]")
+                content = event.get("content") or event.get("step") or ""
+                if content:
+                    print(f"\n{content}")
+            elif etype == "reasoning":
+                if phase != "thinking":
+                    print("\n🧠 [دورة التفكير والساندبوكس - Agent Loop]:\n", end="", flush=True)
+                    phase = "thinking"
+                print(event.get("content", ""), end="", flush=True)
+            elif etype == "text":
+                if phase == "thinking":
+                    print("\n\n🤖 [تسليم الكود والحل النهائي]:\n", end="", flush=True)
+                    phase = "final"
+                print(event.get("content", ""), end="", flush=True)
+            elif etype == "tool_call":
+                print(f"\n🛠️  استدعاء أداة: {event.get('tool')}")
             elif etype == "credit_usage":
-                print(f"\n[💳 استهلاك الكريديت: {event.get('credits')}]")
+                print(f"\n💳 استهلاك الكريديت: +{event.get('credits')}")
             elif etype == "error":
-                print(f"\n❌ خطأ: {event}")
+                print(f"\n❌ خطأ: {event.get('content') or event}")
     except KeyboardInterrupt:
         print("\n⛔ تم الإيقاف بواسطة المستخدم.")
     except Exception as e:

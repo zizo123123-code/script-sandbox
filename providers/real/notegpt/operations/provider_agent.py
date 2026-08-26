@@ -28,6 +28,7 @@ lesson #137. Consequently get/cancel-run are unsupported (see provider.py).
 
 from __future__ import annotations
 
+import time
 from typing import Any, Dict, Generator, List, Optional
 
 from .. import errors as err
@@ -138,6 +139,7 @@ def stream_agent_run(
         return
 
     rotated_once = False
+    has_content = False
 
     for event in parser_mod.iter_events(response.iter_lines()):
         etype = event.get("type")
@@ -174,33 +176,17 @@ def stream_agent_run(
                     sess.record_tool(sub_ev.get("tool"))
                 elif sub_etype == parser_mod.EVENT_CREDIT_USAGE:
                     sess.record_credits(sub_ev.get("credits"))
-                elif sub_etype == parser_mod.EVENT_CONTINUE_NEEDED:
-                    yield sub_ev
-                    if limits_mod.should_auto_continue(sess.continue_calls):
-                        sess.continue_calls += 1
-                        yield from _continue_stream(config, scraper, sess, ctx)
-                    return
+                elif sub_etype in (parser_mod.EVENT_TEXT, parser_mod.EVENT_REASONING):
+                    has_content = True
                 yield sub_ev
-            return
+            break
 
         if etype == parser_mod.EVENT_TOOL_CALL:
             sess.record_tool(event.get("tool"))
         elif etype == parser_mod.EVENT_CREDIT_USAGE:
             sess.record_credits(event.get("credits"))
-
-        # --- Auto-continue --------------------------------------------------
-        if etype == parser_mod.EVENT_CONTINUE_NEEDED:
-            yield event
-            if not limits_mod.should_auto_continue(sess.continue_calls):
-                yield {
-                    "type": parser_mod.EVENT_DONE,
-                    "content": "[DONE]",
-                    "finish_reason": "auto_continue_limit_reached",
-                }
-                return
-            sess.continue_calls += 1
-            yield from _continue_stream(config, scraper, sess, ctx)
-            return
+        elif etype in (parser_mod.EVENT_TEXT, parser_mod.EVENT_REASONING):
+            has_content = True
 
         if etype == parser_mod.EVENT_ERROR:
             normalized = runtime_errors.parse_stream_error(event)
@@ -210,22 +196,37 @@ def stream_agent_run(
             yield event
             return
 
-        if etype == parser_mod.EVENT_TEXT:
-            done_received = True
-
         yield event
 
-        if etype == parser_mod.EVENT_DONE:
-            done_received = True
-            return
+        if etype == parser_mod.EVENT_DONE and has_content:
+            break
 
-    # Auto-continue loop (01.06:890-908) when initial stream completes sandbox setup
-    while not done_received and limits_mod.should_auto_continue(sess.continue_calls):
-        sess.continue_calls += 1
+    # 🔄 Auto-continue loop (01.06:890-908) to fetch reasoning and complete answer until [DONE]
+    continue_attempts = 0
+    done_received = False
+    max_attempts = getattr(config, "max_continue_attempts", 25)
+    while not done_received and continue_attempts < max_attempts:
+        continue_attempts += 1
+        sess.continue_calls = continue_attempts
+        sess.recovery_used = True
+        yield {
+            "type": parser_mod.EVENT_INFO,
+            "subtype": "auto_continue",
+            "step": f"استئناف الساندبوكس #{continue_attempts}",
+            "content": f"🔄 [استئناف تلقائي]: جاري تشغيل الساندبوكس واستلام الرد (استئناف #{continue_attempts})...",
+        }
+        time.sleep(1)
         for c_event in _continue_stream(config, scraper, sess, ctx):
-            if c_event.get("type") in (parser_mod.EVENT_TEXT, parser_mod.EVENT_DONE):
+            ce_type = c_event.get("type")
+            if ce_type == parser_mod.EVENT_DONE:
                 done_received = True
-            yield c_event
+                yield c_event
+                break
+            elif ce_type == parser_mod.EVENT_CONTINUE_NEEDED:
+                done_received = False
+                break
+            else:
+                yield c_event
 
 
 def _continue_stream(
