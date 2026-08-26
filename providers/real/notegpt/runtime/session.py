@@ -22,10 +22,13 @@ protocol — the platform owns its own persistence (tenant-scoped, 30 §15.4).
 
 from __future__ import annotations
 
+import logging
 import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+
+_LOG = logging.getLogger(__name__)
 
 
 @dataclass
@@ -125,8 +128,28 @@ def create_chat_session(
     sess: ConversationSession,
     prompt: str,
     ctx: Dict[str, Any],
+    sources: Optional[List[Any]] = None,
 ) -> None:
-    """Pre-register chat session on NoteGPT /api/v2/ai-chat (01.06:596-629)"""
+    """
+    Pre-register chat session on NoteGPT /api/v2/ai-chat (01.06:596-629).
+
+    T-03 — `sources` are the caller's attachments. They are converted to the
+    browser-history `fileInfos[]` shape (7 fields, 01.06:580-594) by the module
+    that owns that schema. `fileInfos` was previously hardcoded to `[]`, so
+    attachments never appeared in the provider's own history record even when
+    they were sent with the generation request.
+
+    Failure here is non-fatal by design: pre-registration only populates the
+    provider's "Recents" list, so a failure must not abort a usable run.
+    """
+    file_infos: List[Dict[str, Any]] = []
+    if sources:
+        # Imported lazily: this is the only runtime -> assets dependency, and a
+        # module-level import would create a cycle via assets -> config.
+        from ..assets import upload as upload_mod
+
+        file_infos = upload_mod.build_history_file_infos(sources)
+
     try:
         now_ms = int(time.time() * 1000)
         payload = {
@@ -146,7 +169,7 @@ def create_chat_session(
                     "conversation_id": sess.conversation_id,
                     "created_at": now_ms,
                     "fileInfo": None,
-                    "fileInfos": [],
+                    "fileInfos": file_infos,
                     "modelValue": sess.model or config.model,
                     "isAutoModel": sess.is_auto_model,
                     "isStopped": False,
@@ -154,5 +177,19 @@ def create_chat_session(
             },
         }
         scraper.post(config.url("chat_record"), json=payload, headers=ctx["headers"], cookies=ctx["cookies"], timeout=5)
-    except Exception:
-        pass
+    except Exception as exc:
+        # T-07 — previously `except Exception: pass`, which made every failure
+        # invisible: a broken pre-registration looked identical to a successful
+        # one. The control flow is unchanged (still non-fatal), but the failure
+        # is now diagnosable.
+        #
+        # Logged: exception TYPE, endpoint KEY, and attachment COUNT only.
+        # Never the payload, prompt, headers, cookies or any token — the body
+        # carries user content and the context carries credentials.
+        _LOG.warning(
+            "chat session pre-registration failed: %s (endpoint=%s, attachments=%d) "
+            "— run continues; provider history may be incomplete",
+            type(exc).__name__,
+            "chat_record",
+            len(file_infos),
+        )
