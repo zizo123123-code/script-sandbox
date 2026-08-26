@@ -235,3 +235,156 @@ def test_upload_failure_is_not_silently_swallowed():
         assert not body_is_only_pass, (
             "upload failure is swallowed by `except: pass` — the caller cannot tell"
         )
+
+
+# ==============================================================================
+# P1b — the repo-wide secret gate must judge VALUES, not NAMES
+# ==============================================================================
+# `secret_scan.py` is the gate that `doctor.py` does not provide. It is a
+# standalone script nothing imports, so a regression in it is invisible to the
+# rest of the suite — the same reason the guards above exist.
+#
+# Two false-positive classes were measured on it, sharing one root: the rules
+# match `<sensitive key> = "<value>"` without asking whether the captured value
+# is a secret or merely the NAME of the env var the secret is read from.
+#     ENV_PASSWORD = "NOTEGPT_PASSWORD"   <- config.py:105, flagged (wrong)
+#     PASSWORD     = <a literal secret>   <- flagged (right)
+# It reported 32 secrets where 29 were real; the 3 extras were the very
+# constants that keep credentials out of the source, plus a comment describing
+# that pattern. A gate that cries wolf on the correct pattern trains people to
+# ignore it, which is how the 29 real ones survive.
+#
+# Both directions are asserted here: names stay silent, and every real form
+# still fires. The second half is what stops the fix from becoming a blindfold.
+def _run_secret_scan(tmp_path, body: str):
+    """Run the real gate over a throwaway file inside the repo, return findings."""
+    import sys
+
+    sys.path.insert(0, str(REPO_ROOT / ".connect" / "tools"))
+    try:
+        import secret_scan
+    finally:
+        sys.path.pop(0)
+
+    probe_dir = REPO_ROOT / ".tmp_hygiene_probe"
+    probe_dir.mkdir(exist_ok=True)
+    probe = probe_dir / "probe.py"
+    try:
+        probe.write_text(body, encoding="utf-8")
+        return secret_scan.scan_file(probe)
+    finally:
+        probe.unlink(missing_ok=True)
+        probe_dir.rmdir()
+
+
+def test_secret_scan_does_not_flag_env_var_names():
+    """
+    An env-var NAME is not a credential. Flagging `ENV_PASSWORD =
+    "NOTEGPT_PASSWORD"` punishes the mechanism that keeps secrets out of source.
+    """
+    findings = _run_secret_scan(
+        None,
+        'ENV_EMAIL = "NOTEGPT_EMAIL"\n'
+        'ENV_PASSWORD = "NOTEGPT_PASSWORD"\n'
+        'ENV_SESSION_TOKEN = "NOTEGPT_SESSION_TOKEN"\n',
+    )
+    assert not findings, f"env var NAMES misreported as secrets: {findings}"
+
+
+def test_secret_scan_still_flags_every_real_secret_form():
+    """
+    The name/value exemption must not become a blindfold. Every SPELLING below
+    is one that leaked in this repo's history; the VALUES are fabricated.
+
+    Using the actual historical credentials here would re-leak them into a new
+    file — and this guard's own end-to-end test caught exactly that when this
+    fixture was first written with the real ones. What the assertion depends on
+    is the shape of each declaration, not the literal, so fabricated values test
+    the same thing without adding a copy of a real secret to the repo.
+
+    The values are also deliberately NOT canary/reserved-domain strings, since
+    those are exempt by design and would make this test vacuously pass.
+
+    Finally, the literals are ASSEMBLED at runtime rather than written out. A
+    fixture of secret-shaped literals is itself a finding to any scanner — and
+    exempting this file by path is precisely the location-based reasoning this
+    module argues against, since it would blind the gate to a genuine secret
+    committed here later. Assembling the values keeps the source free of any
+    secret-shaped literal while the string the gate actually sees is unchanged.
+    """
+    pw = "Qx7" + "Lm2Rv9Tz4"
+    tok = "Zt8Z6Kq2" + "Wm4Xp9Ln3Rv7Bd5Hf1Jc0Sg"
+    mail = "acct7x9" + "@" + "mailhost-9271.zz"
+    apik = "sk-" + "0000zzzz1111yyyy2222xxxx"
+    ghk = "ghp_" + "0000zzzz1111yyyy2222"
+    body = (
+        f'EMAIL: str = "{mail}"\n'                       # 1
+        f'PASSWORD: str = "{pw}"\n'                      # 2
+        f'SESSION_TOKEN: str = "{tok}"\n'                # 3
+        'import os\n'                                    # 4
+        f'os.environ["NOTEGPT_PASSWORD"] = "{pw}"\n'     # 5
+        f'os.environ["NOTEGPT_EMAIL"] = "{mail}"\n'      # 6
+        f'API_KEY = "{apik}"\n'                          # 7
+        f'GH = "{ghk}"\n'                                # 8
+    )
+    findings = _run_secret_scan(None, body)
+    flagged = {f["line"] for f in findings}
+    expected = {1, 2, 3, 5, 6, 7, 8}
+    missed = expected - flagged
+    assert not missed, f"real secrets NOT detected on lines {sorted(missed)}: {findings}"
+
+
+def test_secret_scan_reports_only_real_secrets_in_provider_package():
+    """
+    The provider package must be clean under the gate. This is the end-to-end
+    assertion: it fails both if a secret is committed AND if the gate regresses
+    into flagging the correct env-var-name pattern.
+    """
+    import sys
+
+    sys.path.insert(0, str(REPO_ROOT / ".connect" / "tools"))
+    try:
+        import secret_scan
+    finally:
+        sys.path.pop(0)
+
+    package = REPO_ROOT / "providers" / "real" / "notegpt"
+    findings = []
+    for path in package.rglob("*.py"):
+        findings.extend(secret_scan.scan_file(path))
+    assert not findings, f"provider package not clean under secret_scan: {findings}"
+
+
+# ==============================================================================
+# P2 — ignored-but-tracked build artifacts
+# ==============================================================================
+# `.gitignore` listing a path does NOT untrack files already in the index; git
+# applies ignore rules only to untracked paths. So `.pytest_cache/` sat in
+# `.gitignore:12` while 5 of its files stayed tracked, and every test run
+# produced phantom diffs in `lastfailed`/`nodeids` — noise that hides real
+# changes in review and invites `git add -A` to commit whatever else appears.
+#
+# `git check-ignore` alone cannot catch this: it answers "would this be
+# ignored", which is TRUE for these files. The contradiction is only visible by
+# intersecting the ignore rules with the actual index, which is what this does.
+def test_no_tracked_files_are_gitignored():
+    """
+    A file that is both tracked AND ignored is a contradiction: the repo says
+    "do not track this" while tracking it. `git ls-files -i -c --exclude-standard`
+    reports exactly that intersection.
+    """
+    result = subprocess.run(
+        ["git", "ls-files", "-i", "-c", "--exclude-standard"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        pytest.skip(f"git unavailable: {result.stderr.strip()}")
+
+    offenders = [ln for ln in result.stdout.splitlines() if ln.strip()]
+    assert not offenders, (
+        "these files are tracked despite matching .gitignore — untrack with "
+        f"`git rm -r --cached <path>`: {offenders}"
+    )
