@@ -152,6 +152,17 @@ def iter_events(lines: Iterable[bytes | str]) -> Generator[Dict[str, Any], None,
                 "normalized_error": err.normalize_error(body={"code": code}).to_dict(),
             }
             continue
+        if code is not None and not err.is_success_code(code):
+            # The reference handles non-rotation application codes as explicit
+            # errors (for example 164001 / wrong params). Do not let an error
+            # response look like a quiet boot poll and fall through to an
+            # unrelated empty-stream result.
+            yield {
+                "type": EVENT_ERROR,
+                "code": code,
+                "normalized_error": err.normalize_error(body={"code": code}).to_dict(),
+            }
+            continue
 
         etype = event.get("type")
 

@@ -36,9 +36,9 @@ contract tests, security review, live verification, and approved enablement.
 
 31 §19.13 — *"Keep provider disabled until tests pass."*
 
-The 146 offline tests in `real/notegpt/tests/` all pass (55 contract, 12
-auto-continue bound, 23 attachment-payload wiring, 17 async-boot + login-header,
-8 reference-compatibility regressions, 31 repo hygiene). They cover manifest
+The 148 offline tests in `real/notegpt/tests/` all pass (55 contract, 12
+auto-continue bound, 23 attachment-payload wiring, 18 async-boot + login-header,
+9 reference-compatibility regressions, 31 repo hygiene). They cover manifest
 shape, capability four-state honesty, error normalization, model catalog,
 secret redaction, Core isolation, the auto-continue ceiling, session
 pre-registration, request ordering, per-continue headers, recovery refresh,
@@ -104,6 +104,8 @@ left unchanged.
 | D7 | Tracked `.pytest_cache` files violated the repository's own ignore policy and kept hygiene red | **fixed** | cache removed from Git tracking; full package suite is green |
 | D8 | Parser dropped the reference wire events `create_sandbox` / `resume_sandbox` and their `data.message` step | **fixed** | Existing `EVENT_SANDBOX(boot_pending=True)` contract now accepts both reference and field-observed variants |
 | D9 | A scheduling `[DONE]` could terminate the blocking wrapper before async boot polling | **fixed** | Scheduling sentinels are suppressed until content or a real terminal event; regression test covers the blocking path |
+| D10 | Quiet intermediate boot responses triggered an early `break`, producing `empty_stream` before the boot bound | **fixed** | Quiet polls continue until `BOOT_POLL_LIMIT`; regression test asserts the bounded timeout |
+| D11 | Non-rotation app code `164001` could disappear in the parser and be misreported as `empty_stream` | **fixed** | App-code failures surface as normalized `EVENT_ERROR`; regression test asserts provider code `164001` |
 
 **Two shortcuts from the reference fix were deliberately NOT adopted:**
 

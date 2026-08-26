@@ -297,7 +297,7 @@ def stream_agent_run(
                     yield sub_ev
                     continue
                 if sub_etype == parser_mod.EVENT_ERROR:
-                    normalized = runtime_errors.parse_stream_error(sub_ev)
+                    normalized = sub_ev.get("normalized_error") or runtime_errors.parse_stream_error(sub_ev)
                     if normalized:
                         sub_ev["normalized_error"] = normalized
                         sess.error_encountered = normalized.get("category")
@@ -324,7 +324,7 @@ def stream_agent_run(
             boot_pending = True
 
         if etype == parser_mod.EVENT_ERROR:
-            normalized = runtime_errors.parse_stream_error(event)
+            normalized = event.get("normalized_error") or runtime_errors.parse_stream_error(event)
             if normalized:
                 event["normalized_error"] = normalized
                 sess.error_encountered = normalized.get("category")
@@ -362,11 +362,19 @@ def stream_agent_run(
         while boot_polls < BOOT_POLL_LIMIT:
             boot_polls += 1
             time.sleep(CONTINUE_BACKOFF_SECONDS)
-            saw_boot_frame = False
             for b_event in _continue_stream(config, scraper, sess, ctx):
                 b_type = b_event.get("type")
+                if b_type == parser_mod.EVENT_ERROR:
+                    # A provider error is an explicit terminal signal for this
+                    # bounded boot phase; do not retry it as if it were a quiet
+                    # poll. Preserve an app-code normalization when present.
+                    normalized = b_event.get("normalized_error") or runtime_errors.parse_stream_error(b_event)
+                    if normalized:
+                        b_event["normalized_error"] = normalized
+                        sess.error_encountered = normalized.get("category")
+                    yield b_event
+                    return
                 if b_type == parser_mod.EVENT_SANDBOX and b_event.get("boot_pending"):
-                    saw_boot_frame = True
                     yield b_event
                     continue
                 if b_type in (parser_mod.EVENT_TEXT, parser_mod.EVENT_REASONING):
@@ -388,12 +396,11 @@ def stream_agent_run(
                     continue
                 yield b_event
             # Content arrived, or the provider asked for a real continue:
-            # the boot phase is over either way.
+            # the boot phase is over either way. A quiet response is NOT an
+            # exit signal: the service can return an empty body while Daytona
+            # is still booting, so the explicit BOOT_POLL_LIMIT is the only
+            # quiet-poll termination boundary.
             if has_content or continue_needed:
-                break
-            if not saw_boot_frame:
-                # Neither boot frame nor content. Nothing left to wait for;
-                # do not spin silently to the bound.
                 break
         else:
             # Bound exhausted while still only seeing warm-up frames.
@@ -470,7 +477,7 @@ def stream_agent_run(
                 continue
 
             if ce_type == parser_mod.EVENT_ERROR:
-                normalized = runtime_errors.parse_stream_error(c_event)
+                normalized = c_event.get("normalized_error") or runtime_errors.parse_stream_error(c_event)
                 if normalized:
                     c_event["normalized_error"] = normalized
                     sess.error_encountered = normalized.get("category")

@@ -105,7 +105,9 @@ Therefore a live `create_sandbox`/`resume_sandbox` frame was dropped, leaving
 follow-up scope is limited to mapping the two reference event names and their
 `data.message` step field into the existing known `EVENT_SANDBOX` contract, plus
 keeping a scheduling `[DONE]` sentinel from becoming a terminal event before
-that bounded wait. The existing bounded boot wait remains unchanged.
+that bounded wait, and preventing quiet intermediate polls from ending the wait
+before `BOOT_POLL_LIMIT`. Non-rotation app codes such as `164001` are surfaced
+as explicit normalized errors. The bounded boot wait itself remains unchanged.
 
 ## Non-deviations deliberately left alone
 

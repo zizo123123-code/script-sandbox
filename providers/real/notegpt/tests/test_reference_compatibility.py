@@ -59,6 +59,16 @@ def test_reference_boot_event_names_are_not_dropped():
     assert all(event["boot_pending"] is True for event in events)
 
 
+def test_non_rotation_app_code_is_surfaced_as_explicit_error():
+    """`164001` must not disappear and become an unrelated empty-stream error."""
+    events = list(parser_mod.iter_events([
+        mt.sse({"code": 164001, "message": "wrong params"}),
+    ]))
+    assert len(events) == 1
+    assert events[0]["type"] == parser_mod.EVENT_ERROR
+    assert events[0]["normalized_error"]["provider_code"] == "164001"
+
+
 def test_reference_boot_done_sentinel_still_polls_for_answer(monkeypatch):
     """A scheduling stream's `[DONE]` is not the final agent answer."""
     monkeypatch.setattr(agent_mod, "CONTINUE_BACKOFF_SECONDS", 0)

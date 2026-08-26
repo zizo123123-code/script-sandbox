@@ -218,20 +218,37 @@ def test_healthy_stream_never_enters_the_boot_wait():
     assert [e.get("content") for e in events if e.get("type") == parser_mod.EVENT_TEXT] == ["instant"]
 
 
-def test_boot_wait_exits_immediately_on_a_silent_stream():
+def test_boot_wait_tolerates_quiet_polls_until_the_bound(monkeypatch):
     """
-    A stream with neither boot frames nor content must not spin to the bound —
-    there is nothing to wait for.
+    A quiet response is not proof that the asynchronous sandbox is dead.
+
+    The live report showed empty/quiet `agent-stream/continue` responses during
+    Daytona boot. Keep polling until the explicit boot bound, then emit the
+    bounded retryable timeout instead of falling through to `empty_stream`.
     """
+    monkeypatch.setattr(agent_mod, "CONTINUE_BACKOFF_SECONDS", 0)
     transport = mt.MockTransport(
         stream_script=[[mt.line_boot(step=None, etype="start")]],
-        continue_script=[[]],           # silence
+        continue_script=[[]],           # quiet intermediate polls
         max_continue_requests=agent_mod.BOOT_POLL_LIMIT + 5,
     )
-    _run(transport)
-    assert transport.continue_requests == 1, (
-        f"spun {transport.continue_requests} times on a silent stream"
+    events = _run(transport)
+    assert transport.continue_requests == agent_mod.BOOT_POLL_LIMIT
+    errors = [e for e in events if e.get("type") == parser_mod.EVENT_ERROR]
+    assert errors[-1]["normalized_error"]["provider_code"] == "sandbox_boot_timeout"
+
+
+def test_boot_wait_stops_on_an_explicit_provider_error(monkeypatch):
+    """An explicit app-code failure is not retried as a quiet boot poll."""
+    monkeypatch.setattr(agent_mod, "CONTINUE_BACKOFF_SECONDS", 0)
+    transport = mt.MockTransport(
+        stream_script=[[mt.line_boot(step=None, etype="start")]],
+        continue_script=[[mt.sse({"code": 164001, "message": "wrong params"})]],
     )
+    events = _run(transport)
+    assert transport.continue_requests == 1
+    errors = [e for e in events if e.get("type") == parser_mod.EVENT_ERROR]
+    assert errors[-1]["normalized_error"]["provider_code"] == "164001"
 
 
 def test_real_truncation_after_boot_still_uses_the_ceiling():
