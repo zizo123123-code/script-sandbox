@@ -32,6 +32,7 @@ import time
 from typing import Any, Dict, Generator, List, Optional
 
 from .. import errors as err
+from ..assets import upload as upload_mod
 from ..config import NoteGPTConfig
 from ..discovery import limits as limits_mod
 from ..runtime import auth as auth_mod
@@ -122,13 +123,23 @@ def stream_agent_run(
         anon_user_id=sess.anon_user_id,
         sbox_guid=sess.sbox_guid,
     )
+    # T-03 (payload confusion) — the two attachment shapes must not be crossed.
+    # `request["files"]` holds caller-facing dicts ({url, name, type, size}).
+    # `build_stream_payload()` copies whatever it is handed straight into the
+    # body, so passing the raw list shipped ZERO of the 5 native stream fields
+    # and leaked a foreign `type` key whose 10/20 encoding belongs to the
+    # *history* shape. Normalize here, at the single call site that owns the
+    # generation body:
+    #   stream  files[]     -> build_stream_files_payload()  (file_name, ...)
+    #   history fileInfos[] -> build_history_file_infos()    (type, url_type, ...)
+    sources = request.get("files")
     payload = request_mod.build_stream_payload(
         config,
         prompt,
         sess.conversation_id,
         model=sess.model,
         is_auto_model=sess.is_auto_model,
-        files=request.get("files"),
+        files=upload_mod.build_stream_files_payload(sources) if sources else None,
     )
 
     yield {"type": parser_mod.EVENT_SANDBOX, "step": "initializing_sandbox"}
