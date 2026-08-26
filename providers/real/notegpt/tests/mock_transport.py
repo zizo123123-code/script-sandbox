@@ -137,6 +137,7 @@ class MockTransport:
         self.stream_requests = 0
         self.continue_requests = 0
         self.session_payloads: List[Dict[str, Any]] = []
+        self.stream_payloads: List[Dict[str, Any]] = []
         self.urls: List[str] = []
 
     # -- helpers ------------------------------------------------------------
@@ -170,6 +171,12 @@ class MockTransport:
                 self.session_payloads.append(payload)
             return MockResponse([], 200)
 
+        # Generation request (payload-confusion observation point): record the
+        # body so tests can assert the `files[]` shape actually transmitted.
+        stream_payload = kwargs.get("json")
+        if isinstance(stream_payload, dict):
+            self.stream_payloads.append(stream_payload)
+
         lines = self._pick(self.stream_script, self.stream_requests)
         self.stream_requests += 1
         return MockResponse(lines, self.status_code)
@@ -179,3 +186,8 @@ class MockTransport:
         """The single chat_list entry sent during session pre-registration."""
         assert self.session_payloads, "no session pre-registration POST was made"
         return self.session_payloads[0]["content"]["chat_list"][0]
+
+    def first_stream_payload(self) -> Dict[str, Any]:
+        """The body POSTed to the generation endpoint (/api/v2/chat/stream)."""
+        assert self.stream_payloads, "no generation POST was made"
+        return self.stream_payloads[0]
