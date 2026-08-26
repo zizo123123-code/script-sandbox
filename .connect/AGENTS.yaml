@@ -15,6 +15,14 @@ naming_rules:
   - "أول سطر في أي سكربت جديد: # Based-on: <اسم الملف الأصل أو NONE>"
 
 agents:
+  ARN:
+    name: Arena
+    status: active
+    role: "أيجنت تنفيذ ومراجعة — Arena.ai Agent Mode"
+    room: ".connect/agents/ARN/"
+    previous_codes: []
+    joined: "2026-08-26"
+
   AG:
     name: Antigravity
     status: active
