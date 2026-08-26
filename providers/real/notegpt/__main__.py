@@ -58,6 +58,11 @@ def main() -> None:
         help="عرض قائمة النماذج الـ 36 المعتمدة",
     )
     parser.add_argument(
+        "--file", "-f",
+        default=None,
+        help="مسار ملف نصي يحتوي على السؤال أو الطلب (مثال: -f prompt.txt)",
+    )
+    parser.add_argument(
         "--session", "-s",
         default=None,
         help="معرف جلسة سابقة لاستئناف نفس الساندبوكس",
@@ -65,7 +70,18 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    # 1. عرض النماذج
+    # 1. تحديد نص السؤال من الملف أو من المعامل
+    prompt_text = args.prompt
+    if args.file:
+        if os.path.exists(args.file):
+            with open(args.file, "r", encoding="utf-8", errors="replace") as fh:
+                prompt_text = fh.read().strip()
+            print(f"📂 تم قراءة السؤال من الملف: {args.file}")
+        else:
+            print(f"❌ خطأ: الملف المحدد غير موجود: {args.file}")
+            return
+
+    # 2. عرض النماذج
     if args.list_models:
         models = models_mod.discover_models()
         print(f"\n🧠 كتالوج نماذج NoteGPT المعتمدة ({len(models)} نموذجاً):")
@@ -83,7 +99,7 @@ def main() -> None:
     print("🚀 NoteGPT Direct CLI Runner — تشغيل المزود ذاتياً")
     print("=" * 75)
 
-    # 2. تأمين بيانات الحساب من البيئة أو الافتراضية
+    # 3. تأمين بيانات الحساب من البيئة أو الافتراضية
     if not os.environ.get("NOTEGPT_EMAIL"):
         os.environ["NOTEGPT_EMAIL"] = "um66jywg@emalupe.com"
         os.environ["NOTEGPT_PASSWORD"] = "Password123#$"
@@ -91,7 +107,7 @@ def main() -> None:
     config = NoteGPTConfig()
     client = NoteGPTClient(config=config, model=args.model, conversation_id=args.session)
 
-    print(f"💬 السؤال: '{args.prompt}'")
+    print(f"💬 السؤال: '{prompt_text}'")
     print(f"🤖 النموذج: {args.model}")
     print(f"🏷️ الجلسة: {client.session.conversation_id}")
     print("📡 البث المباشر للرد (Live Streaming):")
@@ -99,7 +115,7 @@ def main() -> None:
 
     start_t = time.time()
     try:
-        for event in client.stream(args.prompt):
+        for event in client.stream(prompt_text):
             etype = event.get("type")
             if etype == "text":
                 print(event.get("content", ""), end="", flush=True)
