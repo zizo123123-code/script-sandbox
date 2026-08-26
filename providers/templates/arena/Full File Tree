@@ -1,0 +1,15 @@
+manifest.yaml
+README.md
+__init__.py
+config.py
+errors.py
+provider.py
+discovery/__init__.py
+discovery/capabilities.py
+discovery/models.py
+operations/__init__.py
+operations/provider_agent.py
+provider_health/__init__.py
+provider_health/monitor.py
+tests/__init__.py
+tests/test_contract.py

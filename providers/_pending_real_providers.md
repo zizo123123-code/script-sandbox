@@ -2,8 +2,10 @@
 
 SPEC: `01_31_PROVIDER_SCAFFOLDING_AND_ONBOARDING.md` §9 (Pending Providers File)
 
-One real provider now exists in the tree (`real/notegpt/`), and it is
-**disabled**. No provider is active for routing.
+One real provider exists in the tree (`real/notegpt/`), and it is
+**disabled**. A separate `templates/arena/` scaffold was added for the
+Arena.ai agent, but it is **not** a real provider and is also non-routable.
+No provider is active for routing.
 
 ---
 
@@ -12,6 +14,23 @@ One real provider now exists in the tree (`real/notegpt/`), and it is
 | Provider | Type (31 §20) | Status | `is_functional` | Blocking item |
 |---|---|---|---|---|
 | `notegpt` | C — Session/Cookie Website<br>L — Provider-Native Agent | `disabled` | `false` | Live contract tests + security review (checklist items 9, 10, 14) |
+| `arena` | L — Provider-Native Agent **template** | `template_disabled` | `false` | Arena API/auth/event contract, capability evidence, tests, and security review |
+
+### Why `arena` is not a real provider
+
+`templates/arena/` is an architecture scaffold for the Arena.ai agent, not an
+integration. This repository contains no verified Arena endpoint, auth format,
+model catalog, event schema, or rate-limit evidence. The adapter therefore has
+no HTTP client, returns `provider_disabled` for execution, reports
+`SUSPENDED` health, exposes no routable capabilities, and must not be promoted
+to `real/` or `active` by configuration alone.
+
+Before conversion to a real provider, the owner must supply the provider
+contract and complete the Type L checklist: agent lifecycle/event
+normalization, tool and tenant boundaries, error/rate-limit mapping, offline
+contract tests, security review, live verification, and approved enablement.
+
+---
 
 ### Why `notegpt` is not active
 

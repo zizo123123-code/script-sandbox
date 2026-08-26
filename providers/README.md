@@ -9,8 +9,17 @@ SPEC: `01_30_PROVIDER_ARCHITECTURE_AND_PLUGIN_SPEC.md`
 providers/
 ├── README.md                       ← this file
 ├── _pending_real_providers.md       ← activation state (31 §9)
+├── templates/
+│   └── arena/                      ← Arena.ai Type L template, disabled
+│       ├── manifest.yaml
+│       ├── provider.py              ← the ONLY Core-facing surface
+│       ├── config.py / errors.py
+│       ├── discovery/               ← capability shape + empty model catalog
+│       ├── operations/              ← non-executable provider-agent surface
+│       ├── provider_health/         ← non-networking suspended health check
+│       └── tests/                   ← stdlib-only offline contract tests
 └── real/
-    └── notegpt/                     ← real provider, status: disabled
+    └── notegpt/                    ← real provider, status: disabled
         ├── manifest.yaml
         ├── provider.py              ← the ONLY Core-facing surface
         ├── client.py                ← provider-internal facade
@@ -23,14 +32,15 @@ providers/
         ├── assets/                  ← upload (both paths blocked), download
         ├── pool/                    ← 7 not-applicable stubs
         ├── provider_health/         ← monitor, circuit breaker
-        └── tests/                   ← 48 offline contract tests
+        └── tests/                   ← offline contract tests
 ```
 
-The `registry/`, `common/`, and `templates/` directories from 31 §5 are not
-present in this repo. This repo currently holds the specifications plus the
-first real provider; the shared scaffold lives in the platform Core repo. The
-provider is written so that no Core module is required for it to be imported,
-validated, or tested.
+The `registry/` and `common/` directories from 31 §5 are not present in this
+repo; the shared scaffold lives in the platform Core repo. `templates/arena/`
+is intentionally separate from `real/`: it is a safe, disabled scaffold for
+this Arena.ai agent, not a claim that an Arena.ai integration exists. Both
+packages are written so no Core module is required to be imported, inspected,
+or tested.
 
 ## The boundary rule
 
@@ -38,37 +48,40 @@ validated, or tested.
 
 ```python
 from providers.real.notegpt import NoteGPTProvider   # allowed
+from providers.templates.arena import ArenaProvider    # allowed for inspection
 from providers.real.notegpt.runtime.auth import login  # NOT allowed from Core
 ```
 
-`providers/real/notegpt/__init__.py` exports exactly
-`["NoteGPTProvider", "get_provider"]`, and a contract test asserts that list
-does not grow.
+Each public package exports exactly its adapter and factory:
+`notegpt` exposes `["NoteGPTProvider", "get_provider"]`, while the Arena
+scaffold exposes `["ArenaProvider", "get_provider"]`. Contract tests assert
+that these public surfaces do not grow accidentally.
 
 ## Provider status
 
 | Provider | Status | Routable |
 |---|---|---|
 | `notegpt` | `disabled` | no |
+| `arena` | `template_disabled` | no |
 
 Nothing here is routable. `is_functional: false` excludes a provider from
-execution (31 §10), and the adapter additionally raises
-`ProviderDisabledError` from its activation gate, so a misconfigured router
-cannot execute a declared operation by accident.
+execution (31 §10). The Arena template additionally has no HTTP client and
+returns a normalized `provider_disabled` error for every execution attempt, so
+a misconfigured router cannot execute a declared operation by accident.
 
 ## Running the contract tests
 
 ```bash
-# with pytest
+# NoteGPT (pytest when installed)
 python3 -m pytest providers/real/notegpt/tests/ -v
 
-# without pytest
-python3 providers/real/notegpt/tests/test_contract.py
+# Arena template — stdlib only
+python3 providers/templates/arena/tests/test_contract.py
 ```
 
 These tests make **no network calls**. They verify the contract — manifest
-validity, tri-state capabilities, error normalization, model catalog,
-unsupported-operation rejection, secret redaction, and Core isolation.
+validity, disabled/non-functional state, capability gating, empty model
+catalog, error normalization, secret redaction, and Core isolation.
 
 They do not verify that generation works. Per 31 §11, *"Do not write tests
 that pretend generation works"* — and that gap is precisely why the provider
