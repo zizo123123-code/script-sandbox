@@ -5,7 +5,7 @@
 |---|---|
 | **الحالة** | `READY` — T-ARENA-001 مكتملة محلياً |
 | **آخر جلسة** | 2026-08-26 |
-| **آخر Commit** | سيُسجَّل بعد الـ commit المحلي |
+| **آخر Commit** | `c55c5f4` — Arena room + disabled provider template |
 
 ---
 
