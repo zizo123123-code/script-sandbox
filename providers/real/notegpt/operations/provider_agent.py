@@ -40,6 +40,10 @@ from ..runtime import parser as parser_mod
 from ..runtime import request as request_mod
 from ..runtime import session as session_mod
 
+# Pause between auto-continue requests — mirrors the reference script's 1s wait
+# (01.06:890-908). Named so tests can patch it instead of sleeping for real.
+CONTINUE_BACKOFF_SECONDS = 1
+
 
 def _open_stream(
     config: NoteGPTConfig,
@@ -129,8 +133,12 @@ def stream_agent_run(
 
     yield {"type": parser_mod.EVENT_SANDBOX, "step": "initializing_sandbox"}
 
-    # 01.06:741 — Pre-register chat session on NoteGPT /api/v2/ai-chat
-    session_mod.create_chat_session(config, scraper, sess, prompt, ctx)
+    # 01.06:741 — Pre-register chat session on NoteGPT /api/v2/ai-chat.
+    # T-03: the caller's attachments must reach the history record too; passing
+    # them lets session.py build the native `fileInfos[]` instead of sending [].
+    session_mod.create_chat_session(
+        config, scraper, sess, prompt, ctx, sources=request.get("files")
+    )
 
     response, open_error = _open_stream(config, scraper, config.url("chat_stream"), payload, ctx)
     if open_error:
@@ -140,6 +148,8 @@ def stream_agent_run(
 
     rotated_once = False
     has_content = False
+    # T-01 — auto-continue is entered ONLY if the provider actually asked for it.
+    continue_needed = False
 
     for event in parser_mod.iter_events(response.iter_lines()):
         etype = event.get("type")
@@ -178,6 +188,8 @@ def stream_agent_run(
                     sess.record_credits(sub_ev.get("credits"))
                 elif sub_etype in (parser_mod.EVENT_TEXT, parser_mod.EVENT_REASONING):
                     has_content = True
+                elif sub_etype == parser_mod.EVENT_CONTINUE_NEEDED:
+                    continue_needed = True
                 yield sub_ev
             break
 
@@ -187,6 +199,8 @@ def stream_agent_run(
             sess.record_credits(event.get("credits"))
         elif etype in (parser_mod.EVENT_TEXT, parser_mod.EVENT_REASONING):
             has_content = True
+        elif etype == parser_mod.EVENT_CONTINUE_NEEDED:
+            continue_needed = True
 
         if etype == parser_mod.EVENT_ERROR:
             normalized = runtime_errors.parse_stream_error(event)
@@ -202,31 +216,49 @@ def stream_agent_run(
             break
 
     # 🔄 Auto-continue loop (01.06:890-908) to fetch reasoning and complete answer until [DONE]
-    continue_attempts = 0
-    done_received = False
-    max_attempts = getattr(config, "max_continue_attempts", 25)
-    while not done_received and continue_attempts < max_attempts:
-        continue_attempts += 1
-        sess.continue_calls = continue_attempts
+    #
+    # T-01 — the ceiling is `AUTO_CONTINUE_LIMIT` and nothing else. The previous
+    # version read `getattr(config, "max_continue_attempts", 25)`, a key that
+    # does not exist on NoteGPTConfig, so the fallback 25 always won over the
+    # evidenced 5 (01.06:104). It also entered the loop unconditionally, firing
+    # continue requests even when the first stream had already finished cleanly.
+    #
+    # `sess.continue_calls` is incremented in exactly ONE place below: once per
+    # continue request actually sent. It does not move when `continue_needed` is
+    # merely received, nor when a request is refused at the ceiling.
+    while continue_needed:
+        if not limits_mod.should_auto_continue(sess.continue_calls):
+            # Ceiling reached: refuse the next request instead of sending it.
+            yield {
+                "type": parser_mod.EVENT_DONE,
+                "content": "[DONE]",
+                "finish_reason": "auto_continue_limit_reached",
+            }
+            return
+
+        sess.continue_calls += 1          # <-- single increment site
         sess.recovery_used = True
+        attempt = sess.continue_calls
         yield {
             "type": parser_mod.EVENT_INFO,
             "subtype": "auto_continue",
-            "step": f"استئناف الساندبوكس #{continue_attempts}",
-            "content": f"🔄 [استئناف تلقائي]: جاري تشغيل الساندبوكس واستلام الرد (استئناف #{continue_attempts})...",
+            "step": f"استئناف الساندبوكس #{attempt}",
+            "content": f"🔄 [استئناف تلقائي]: جاري تشغيل الساندبوكس واستلام الرد (استئناف #{attempt})...",
         }
-        time.sleep(1)
+        time.sleep(CONTINUE_BACKOFF_SECONDS)
+
+        # Re-evaluated per response: only a fresh `continue_needed` keeps the
+        # loop alive. A natural end, an error, or an exhausted stream ends it.
+        continue_needed = False
         for c_event in _continue_stream(config, scraper, sess, ctx):
             ce_type = c_event.get("type")
             if ce_type == parser_mod.EVENT_DONE:
-                done_received = True
                 yield c_event
+                return
+            if ce_type == parser_mod.EVENT_CONTINUE_NEEDED:
+                continue_needed = True
                 break
-            elif ce_type == parser_mod.EVENT_CONTINUE_NEEDED:
-                done_received = False
-                break
-            else:
-                yield c_event
+            yield c_event
 
 
 def _continue_stream(
@@ -244,18 +276,13 @@ def _continue_stream(
         yield {"type": parser_mod.EVENT_ERROR, "normalized_error": open_error}
         return
 
+    # T-01 — this function performs exactly ONE request and does not recurse.
+    # It previously incremented `sess.continue_calls` and re-entered itself,
+    # which meant the counter advanced in two different places (here and in the
+    # caller's loop) and the ceiling was enforced on a value the caller had
+    # already overwritten. Bounding and counting now live solely in the caller;
+    # `continue_needed` is simply reported upward.
     for event in parser_mod.iter_events(response.iter_lines()):
-        if event.get("type") == parser_mod.EVENT_CONTINUE_NEEDED:
-            if not limits_mod.should_auto_continue(sess.continue_calls):
-                yield {
-                    "type": parser_mod.EVENT_DONE,
-                    "content": "[DONE]",
-                    "finish_reason": "auto_continue_limit_reached",
-                }
-                return
-            sess.continue_calls += 1
-            yield from _continue_stream(config, scraper, sess, ctx)
-            return
         yield event
 
 
