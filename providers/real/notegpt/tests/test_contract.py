@@ -535,6 +535,15 @@ def test_no_hardcoded_credentials_in_package():
                 continue
             if len(value.value) < 3 or test_value.search(value.value):
                 continue
+            # An env-var NAME is not a credential VALUE. `config.py` legitimately
+            # declares `ENV_PASSWORD = "NOTEGPT_PASSWORD"` — that constant is the
+            # very mechanism that keeps secrets OUT of the source, so flagging it
+            # would punish the correct pattern. Distinguished structurally (the
+            # value is itself a bare SCREAMING_SNAKE identifier), not by trusting
+            # a file name: a real password would have to consist solely of
+            # uppercase, digits and underscores to slip through here.
+            if re.fullmatch(r"[A-Z][A-Z0-9_]*", value.value):
+                continue
             names = list(target_names(node)) if isinstance(node, ast.Assign) else []
             if isinstance(node, ast.AnnAssign):
                 tgt = node.target
