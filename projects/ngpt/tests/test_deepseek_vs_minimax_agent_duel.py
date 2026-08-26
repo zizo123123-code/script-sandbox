@@ -99,8 +99,8 @@ class Config:
     REQUEST_TIMEOUT: int = 60
 
     # بيانات الحساب المسجل لسحب التوكن الحي
-    EMAIL: str = "r2ewt31t4354@msp.mailings.live"
-    PASSWORD: str = "GPt2sjUZwFKf#vd"
+    EMAIL: str = os.environ.get("NOTEGPT_EMAIL", "")
+    PASSWORD: str = os.environ.get("NOTEGPT_PASSWORD", "")
     SESSION_TOKEN: str = ""
 
 
