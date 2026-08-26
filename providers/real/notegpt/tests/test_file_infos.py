@@ -38,6 +38,7 @@ import pytest
 
 from providers.real.notegpt.assets import upload as upload_mod
 from providers.real.notegpt.operations import provider_agent as pa
+from providers.real.notegpt.runtime import request as request_mod
 from providers.real.notegpt.runtime import session as session_mod
 
 from . import mock_transport as mt
@@ -338,3 +339,86 @@ def test_no_attachments_omits_files_key_entirely(config, clean_transport):
     """
     _run(config, clean_transport)
     assert "files" not in clean_transport.first_stream_payload()
+
+
+# ==============================================================================
+# The BUILDER itself must own the invariant (T-03b root fix)
+# ==============================================================================
+# The tests above drive `stream_agent_run()`, so they only prove that ONE call
+# site normalizes. `build_stream_payload()` still copied its `files` argument
+# verbatim, which means the guarantee lived in the caller, not in the function
+# that owns the body — any new call site could reintroduce the identical bug
+# while every test above stayed green.
+#
+# Reproduced against the builder directly, before the root fix:
+#     build_stream_payload(cfg, "hi", "c1", files=[{"url":..,"name":..,
+#                                                  "type":..,"size":..}])
+#     -> files[0] keys == ['name','size','type','url']   (0/5 native fields,
+#                                                         foreign 'type' leaked)
+#
+# These tests call the builder with NO agent loop involved, so they fail if the
+# normalization is ever moved back out of it.
+def test_builder_normalizes_raw_caller_dicts_without_any_call_site(config):
+    """The builder alone must emit the 5 native fields from raw caller dicts."""
+    payload = request_mod.build_stream_payload(
+        config, "hi", "conv-1", files=[IMAGE]
+    )
+
+    entry = payload["files"][0]
+    assert set(entry) == STREAM_FIELDS, f"builder did not normalize: {sorted(entry)}"
+
+
+def test_builder_rejects_history_shape_leaking_into_generation(config):
+    """The history `type` code must not survive the builder."""
+    entry = request_mod.build_stream_payload(
+        config, "hi", "conv-1", files=[IMAGE]
+    )["files"][0]
+
+    assert not (set(entry) & HISTORY_FIELDS)
+    for raw_key in ("url", "name", "size", "type"):
+        assert raw_key not in entry, f"raw caller key {raw_key!r} survived the builder"
+
+
+def test_builder_maps_values_not_only_shape(config):
+    """A right-shaped body with wrong values is still a broken body."""
+    entry = request_mod.build_stream_payload(
+        config, "hi", "conv-1", files=[IMAGE]
+    )["files"][0]
+
+    assert entry["file_url"] == IMAGE["url"]
+    assert entry["file_name"] == IMAGE["name"]
+    assert entry["file_size"] == IMAGE["size"]
+    assert entry["mime_type"] == IMAGE["mime_type"]
+
+
+def test_builder_normalization_is_idempotent(config):
+    """
+    The pre-existing call site normalizes too, so the builder receives an
+    ALREADY-native list. Converting twice must be a no-op, otherwise the root
+    fix would corrupt the very path it was meant to protect.
+    """
+    once = request_mod.build_stream_payload(
+        config, "hi", "conv-1", files=[IMAGE]
+    )["files"]
+    twice = request_mod.build_stream_payload(
+        config, "hi", "conv-1", files=once
+    )["files"]
+
+    assert once == twice, "double normalization changed the payload"
+
+
+def test_builder_omits_files_key_when_nothing_is_attachable(config):
+    """
+    An attachment with no resolvable URL is dropped by the normalizer. The
+    builder must then omit `files` entirely rather than send an empty list.
+    """
+    payload = request_mod.build_stream_payload(
+        config, "hi", "conv-1", files=[{"name": "no-url.txt"}]
+    )
+
+    assert "files" not in payload
+
+
+def test_builder_without_attachments_is_unchanged(config):
+    """No attachments must produce no `files` key at all."""
+    assert "files" not in request_mod.build_stream_payload(config, "hi", "conv-1")
