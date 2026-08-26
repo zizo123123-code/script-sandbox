@@ -149,23 +149,61 @@ def request_signed_url(config: NoteGPTConfig, filename: str, file_size: int) -> 
     }
 
 
-def build_native_files_payload(sources: list) -> list:
-    """
-    Build the native files[] array for an already-hosted asset.
+# ==============================================================================
+# TWO PAYLOAD SHAPES — DO NOT INTERCHANGE (T-03)
+# ==============================================================================
+# The reference implementation carries attachments in two *different* shapes,
+# built by two different functions. Using one where the other belongs sends a
+# structurally invalid body that the provider silently ignores.
+#
+#   stream `files[]`        01.06:273-296  build_native_files_payload
+#       {file_name, file_size, file_url, file_content, mime_type}
+#
+#   history `fileInfos[]`   01.06:580-594  _build_file_infos_for_history
+#       {type, url_type, url, title, size, origin_url, transcriptUrl}
+#
+# This module owns both schemas; callers must not hand-assemble either.
+# ==============================================================================
 
-    Shape from 01.06:632-643 (_build_file_infos_for_history):
-        type: 10 = image, 20 = document
-    This is pure payload assembly — no network I/O, no third-party transit.
+
+def _read(src: Any, *names: str, default: Any = None) -> Any:
     """
-    files = []
+    Read the first present field from a dict or an object.
+
+    Accepts both the caller-facing spelling (`url`, `name`, `size`) and the
+    native spellings (`file_url`, `file_name`, `file_size`) so an attachment
+    already in one native shape can still be converted to the other.
+    """
+    for name in names:
+        if isinstance(src, dict):
+            if src.get(name) not in (None, ""):
+                return src[name]
+        else:
+            value = getattr(src, name, None)
+            if value not in (None, ""):
+                return value
+    return default
+
+
+def build_history_file_infos(sources: list) -> list:
+    """
+    Build the browser-history `fileInfos[]` array — 01.06:580-594.
+
+    Shape (7 fields): type · url_type · url · title · size · origin_url ·
+    transcriptUrl, where type 10 = image and 20 = document.
+
+    This is the shape consumed by session pre-registration (/api/v2/ai-chat).
+    It is NOT the generation `files[]` shape. Pure assembly: no network I/O.
+    """
+    file_infos = []
     for src in sources or []:
-        url = src.get("url") if isinstance(src, dict) else getattr(src, "uploaded_url", None)
+        url = _read(src, "url", "file_url", "uploaded_url")
         if not url:
             continue
-        name = src.get("name") if isinstance(src, dict) else getattr(src, "name", "file")
-        kind = src.get("type") if isinstance(src, dict) else getattr(src, "type", "file")
-        size = src.get("size") if isinstance(src, dict) else getattr(src, "file_size_bytes", None)
-        files.append({
+        name = _read(src, "name", "file_name", "title", default="file")
+        kind = _read(src, "type", "kind", default="file")
+        size = _read(src, "size", "file_size", "file_size_bytes")
+        file_infos.append({
             "type": 10 if kind == "image" else 20,
             "url_type": 1,
             "url": url,
@@ -174,4 +212,39 @@ def build_native_files_payload(sources: list) -> list:
             "origin_url": url,
             "transcriptUrl": "",
         })
-    return files
+    return file_infos
+
+
+def build_stream_files_payload(sources: list) -> list:
+    """
+    Build the generation `files[]` array — 01.06:273-296 (HAR Entry 19).
+
+    Shape (5 fields): file_name · file_size · file_url · file_content ·
+    mime_type. This is the shape the /api/v2/chat/stream body expects, and it
+    is deliberately distinct from `build_history_file_infos()`.
+    """
+    native_files = []
+    for src in sources or []:
+        url = _read(src, "url", "file_url", "uploaded_url")
+        if not url:
+            continue
+        native_files.append({
+            "file_name": _read(src, "name", "file_name", "title", default="file"),
+            "file_size": _read(src, "size", "file_size", "file_size_bytes") or 1024,
+            "file_url": url,
+            "file_content": url,
+            "mime_type": _read(src, "mime_type", "mimetype", "content_type"),
+        })
+    return native_files
+
+
+def build_native_files_payload(sources: list) -> list:
+    """
+    DEPRECATED ALIAS — kept so existing callers do not break.
+
+    Despite its name it always produced the *history* `fileInfos[]` shape, not
+    the generation `files[]` shape its name implies. That mismatch is exactly
+    the confusion the two functions above remove. Prefer calling
+    `build_history_file_infos()` or `build_stream_files_payload()` explicitly.
+    """
+    return build_history_file_infos(sources)
