@@ -11,8 +11,14 @@
 #
 # Every value below is either:
 #   - CONFIRMED : traceable to code line / HAR count
+#   - partial   : the feature exists upstream but a NAMED blocker prevents this
+#                 package from completing it (see capabilities_blockers)
 #   - UNKNOWN   : no evidence in any source (per CORRECTIONS.md §13: absence of
 #                 evidence is NOT evidence of absence — never downgrade to false)
+#
+# T-04 — `capabilities` and `discovery/capabilities.py` are ONE contract and are
+# asserted equal by the contract tests. Changing a value in one file without the
+# other is a test failure, not a silent drift.
 # ==============================================================================
 
 id: notegpt
@@ -81,10 +87,17 @@ capabilities:
   streaming: true                  # SSE, 13 event types (ROUND2 §2)
   reasoning: true                  # deepseek-reasoner / DeepSeek-R1 think=true
   code: true                       # sandbox executes python3 / bash
-  vision_input: true               # image_recognition tool · 01.05:1076
-  file_upload: true                # see assets block (third-party path!)
   provider_agent: true             # Daytona sandbox · 01.05:745-911
   tool_use: true                   # fetch_url / web_search · 01.05:1078
+
+  # --- PARTIALLY_SUPPORTED (T-04) ---
+  # Both were `true`, which claimed a working feature. The send side is real,
+  # but neither can obtain a file URL: the official sign-url path needs an
+  # undocumented HMAC and the only working path is a public third-party host.
+  # `operations.upload_asset` stays true — the entry point exists and answers —
+  # while the capability is honestly incomplete.
+  vision_input: partial            # tool real (01.05:1076), input path blocked
+  file_upload: partial             # files[] real (01.06:759), upload blocked
 
   # --- UNKNOWN (CORRECTIONS.md §13 — no traceable evidence either way) ---
   image_generation: unknown
@@ -98,14 +111,41 @@ capabilities:
   video_generation: unknown        # was falsely CONFIRMED_UNSUPPORTED
   browser: unknown
 
+# --- Blockers for every `partial` capability above --------------------------
+# A `partial` with no entry here is a contract violation (a True in disguise).
+capabilities_blockers:
+  file_upload:
+    blocker: hmac_sign_field_undocumented
+    evidence: "CORRECTIONS.md §5 · ROUND2 §3"
+    detail: >
+      Official path POST /api/v1/upload/sign-url -> Alibaba OSS requires an HMAC
+      `sign` field with an undocumented derivation. The only working path
+      transits tmpfiles.org (public host), refused as a default under 30 §15.4.
+      upload_asset() returns UNSUPPORTED_CAPABILITY unless the caller sets
+      allow_third_party_transit=true.
+  vision_input:
+    blocker: depends_on_blocked_file_upload
+    evidence: "01.05:1076 · ROUND2 §5"
+    detail: >
+      The image_recognition tool is real but consumes an image URL that only the
+      blocked upload path can produce. The catalog also has no per-model vision
+      field, so no model is confirmed multimodal.
+
 # ==============================================================================
 # OPERATIONS — 30 §5 "A provider implements only the operations it declares"
 # ==============================================================================
+# NOTE (T-04) — `operations` and `capabilities` answer DIFFERENT questions:
+#   operations  = "is this entry point declared and reachable?"  (routing)
+#   capabilities= "can the feature actually complete?"           (honesty)
+# So upload_asset/analyze_vision stay true while file_upload/vision_input are
+# `partial`: the calls are dispatched and return a normalized error naming the
+# blocker, instead of the operation being undeclared (which would be a
+# different, wrong signal — see 30 §5).
 operations:
   generate_text: true
   run_provider_agent: true
-  analyze_vision: true
-  upload_asset: true
+  analyze_vision: true             # reachable; capability vision_input=partial
+  upload_asset: true               # reachable; capability file_upload=partial
   download_asset: true
 
   generate_image: false
