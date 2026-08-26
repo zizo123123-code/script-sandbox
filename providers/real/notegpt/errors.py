@@ -113,6 +113,15 @@ APP_CODE_MAP: Dict[int, Dict[str, Any]] = {
         "recovery_fallback": "reauthenticate",
         "evidence": "01.06:798 only (0 HAR occurrences)",
     },
+    # Live login endpoint rate limit
+    164010: {
+        "category": RATE_LIMITED,
+        "retryable": True,
+        "safe_message": "Too many requests. Please try again later.",
+        "recovery": "rotate_identity",
+        "recovery_fallback": "backoff",
+        "evidence": "Live POST /api/v1/auth/email/login response",
+    },
 }
 
 # ==============================================================================

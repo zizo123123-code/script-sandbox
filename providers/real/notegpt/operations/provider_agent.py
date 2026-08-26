@@ -102,12 +102,15 @@ def stream_agent_run(
 
     scraper = request.get("scraper") or request_mod.create_scraper()
 
-    # Authenticate if we hold no token yet.
-    if not config.session_token:
-        _, login_error = auth_mod.login(config, scraper=scraper)
-        if login_error:
-            yield {"type": parser_mod.EVENT_ERROR, "normalized_error": login_error}
-            return
+    # Authenticate if credentials exist (01.06:495-521)
+    if not config.session_token and config.email and config.password:
+        try:
+            _, login_error = auth_mod.login(config, scraper=scraper)
+            if login_error:
+                # If login is rate-limited (164010) or fails, continue with anonymous guest identity (01.06:519)
+                pass
+        except Exception:
+            pass
 
     ctx = auth_mod.build_auth_context(
         config,
@@ -164,7 +167,20 @@ def stream_agent_run(
             if retry_error:
                 yield {"type": parser_mod.EVENT_ERROR, "normalized_error": retry_error}
                 return
-            yield from parser_mod.iter_events(response.iter_lines())
+
+            for sub_ev in parser_mod.iter_events(response.iter_lines()):
+                sub_etype = sub_ev.get("type")
+                if sub_etype == parser_mod.EVENT_TOOL_CALL:
+                    sess.record_tool(sub_ev.get("tool"))
+                elif sub_etype == parser_mod.EVENT_CREDIT_USAGE:
+                    sess.record_credits(sub_ev.get("credits"))
+                elif sub_etype == parser_mod.EVENT_CONTINUE_NEEDED:
+                    yield sub_ev
+                    if limits_mod.should_auto_continue(sess.continue_calls):
+                        sess.continue_calls += 1
+                        yield from _continue_stream(config, scraper, sess, ctx)
+                    return
+                yield sub_ev
             return
 
         if etype == parser_mod.EVENT_TOOL_CALL:
@@ -194,10 +210,22 @@ def stream_agent_run(
             yield event
             return
 
+        if etype == parser_mod.EVENT_TEXT:
+            done_received = True
+
         yield event
 
         if etype == parser_mod.EVENT_DONE:
+            done_received = True
             return
+
+    # Auto-continue loop (01.06:890-908) when initial stream completes sandbox setup
+    while not done_received and limits_mod.should_auto_continue(sess.continue_calls):
+        sess.continue_calls += 1
+        for c_event in _continue_stream(config, scraper, sess, ctx):
+            if c_event.get("type") in (parser_mod.EVENT_TEXT, parser_mod.EVENT_DONE):
+                done_received = True
+            yield c_event
 
 
 def _continue_stream(

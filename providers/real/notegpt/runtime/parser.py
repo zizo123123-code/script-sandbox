@@ -87,20 +87,24 @@ def parse_sse_line(line: bytes | str) -> Optional[Dict[str, Any]]:
     if isinstance(line, bytes):
         decoded = line.decode("utf-8", errors="replace").strip()
     else:
-        decoded = line.strip()
+        decoded = str(line).strip()
 
-    if not decoded or not decoded.startswith(SSE_PREFIX):
+    if not decoded:
         return None
 
-    data_str = decoded[len(SSE_PREFIX):].strip()
+    if decoded.startswith(SSE_PREFIX):
+        data_str = decoded[len(SSE_PREFIX):].strip()
+    elif decoded.startswith("{") and decoded.endswith("}"):
+        data_str = decoded
+    else:
+        return None
+
     if data_str == DONE_SENTINEL:
         return {"type": EVENT_DONE, "content": DONE_SENTINEL}
 
     try:
         return json.loads(data_str)
     except json.JSONDecodeError:
-        # 01.06:733 swallows these silently; we surface them as a typed event
-        # so a malformed stream is observable instead of invisible.
         return {"type": EVENT_ERROR, "content": "malformed_sse_json", "raw_len": len(data_str)}
 
 

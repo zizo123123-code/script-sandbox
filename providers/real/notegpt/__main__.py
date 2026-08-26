@@ -134,9 +134,13 @@ def main() -> None:
             if etype == "text":
                 print(event.get("content", ""), end="", flush=True)
             elif etype == "reasoning":
-                pass
+                print(event.get("content", ""), end="", flush=True)
             elif etype == "sandbox":
                 print(f"\n[📦 Daytona Sandbox: {event.get('step')}]")
+            elif etype == "tool_call":
+                print(f"\n[🛠️ استدعاء أداة: {event.get('tool')}]")
+            elif etype == "info":
+                print(f"\n[ℹ️ {event.get('subtype', 'info')}: {event.get('content', '')}]")
             elif etype == "credit_usage":
                 print(f"\n[💳 استهلاك الكريديت: {event.get('credits')}]")
             elif etype == "error":
