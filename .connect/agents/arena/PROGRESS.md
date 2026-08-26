@@ -5,7 +5,7 @@
 |---|---|
 | **الحالة** | `READY` — T-NGPT-002 مكتملة محلياً |
 | **آخر جلسة** | 2026-08-26 |
-| **آخر Commit** | `22b537b` — إصلاح T-NGPT-001 (reference flow + SPEC boundaries)؛ T-NGPT-002 قيد الـ commit |
+| **آخر Commit** | `d13ab72` — إصلاح live boot event gap في T-NGPT-002 |
 
 ---
 
