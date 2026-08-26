@@ -29,6 +29,13 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
+# T-01 — single source of truth. The value was previously declared twice
+# (config.py and here) with no link between them, so the two could silently
+# diverge. `config.py` is the origin (it imports nothing internal); this module
+# re-exports the same object so `limits_mod.AUTO_CONTINUE_LIMIT` and
+# `config.AUTO_CONTINUE_LIMIT` can never disagree.
+from ..config import AUTO_CONTINUE_LIMIT  # noqa: F401  (re-exported)
+
 # Normalized states — 30 §12
 STATE_AVAILABLE = "available"
 STATE_LIMITED = "limited"
@@ -37,7 +44,6 @@ STATE_UNKNOWN = "unknown"
 
 # --- CONFIRMED limits -------------------------------------------------------
 QUOTA_EXHAUSTED_CODE = 164019     # HAR x14 · handled 01.06:798
-AUTO_CONTINUE_LIMIT = 5           # 01.06:104
 MAX_ATTACHED_SOURCES = 5          # 01.06:106
 REQUEST_TIMEOUT_SECONDS = 120     # 01.06:103
 
